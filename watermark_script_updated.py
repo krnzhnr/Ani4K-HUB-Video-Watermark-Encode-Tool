@@ -85,10 +85,14 @@ def get_video_metadata(input_file):
             ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=bit_rate",
             "-of", "default=noprint_wrappers=1:nokey=1", input_file],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()) / 1000  # в кбит/с
+        
+        audio_bitrate = float(SETTINGS['target_audio_bitrate']) if audio_bitrate > float(SETTINGS['target_audio_bitrate']) else audio_bitrate
 
         return codec, duration, audio_bitrate
+
     except Exception as e:
         log(f"Не удалось извлечь метаданные для {input_file}: {e}", "ERROR")
+
         return None, None, None
 
 def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
@@ -100,9 +104,11 @@ def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     :param audio_bitrate: Битрейт аудио в кбит/с. Если None, используется target_audio_bitrate.
     :return: Размер видео и аудио потоков в МБ.
     """
+    
     audio_bitrate = SETTINGS["target_audio_bitrate"] or audio_bitrate  # Используем целевой битрейт, если текущий не указан
     video_size = (video_bitrate * duration) / (8 * 1024 * 1024)  # в МБ
     audio_size = (audio_bitrate * duration) / (8 * 1024)  # в МБ
+    
     return video_size, audio_size
 
 def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate, target_size_gb, video_bitrate):
@@ -210,7 +216,7 @@ def process_video(input_file, base_name):
                 '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', '-b:v', f'{video_bitrate}', 
                 '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}', '-colorspace', 'bt709', '-color_primaries', 'bt709', 
                 '-color_trc', 'bt709', '-color_range', 'tv', '-rc-lookahead', '20', '-tag:v', 'hvc1', 
-                '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{SETTINGS['target_audio_bitrate']}k", '-ac', '2',
+                '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
                 '-map_metadata', '-1', '-metadata', f'description={description}', 
                 '-metadata', f'title={description}', output_file
             ], check=True)
@@ -228,7 +234,7 @@ def process_video(input_file, base_name):
                 '-b:v', f'{video_bitrate}', '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}',
                 '-colorspace', 'bt709', '-color_primaries', 'bt709', 
                 '-color_trc', 'bt709', '-color_range', 'tv', '-rc-lookahead', '20', '-tag:v', 'hvc1', 
-                '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{SETTINGS['target_audio_bitrate']}k", '-ac', '2', 
+                '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2', 
                 '-map_metadata', '-1', '-metadata', f'title={description}', '-metadata', f'description={description}', 
                 no_wm_output_file
             ], check=True)
