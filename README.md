@@ -65,5 +65,5 @@ The settings for the script are located in the config.yaml file. You can adjust 
    ```
 The script will process all video files in the input directory, apply the watermark, and encode them. If the video length exceeds the threshold, the script will adjust the bitrate to ensure the file size does not exceed the maximum size defined in the config.
 
-License
+## License
 This project is licensed under the MIT License - see the LICENSE file for details.
