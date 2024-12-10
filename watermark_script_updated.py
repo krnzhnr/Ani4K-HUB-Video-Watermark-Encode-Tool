@@ -64,36 +64,74 @@ os.makedirs(no_wm_output_dir, exist_ok=True)
 
 def get_video_metadata(input_file):
     """
-    Извлекает метаданные видеофайла, включая кодек, длительность и битрейт аудио, с помощью ffprobe.
+    Извлекает метаданные видеофайла, включая кодек, длительность, битрейт аудио и параметры цвета, с помощью ffprobe.
+    Параметры цвета обрабатываются, если они не извлечены — используются значения по умолчанию.
 
     :param input_file: Путь к видеофайлу.
-    :return: Кодек видео, длительность в секундах, битрейт аудио в кбит/с.
+    :return: Кодек видео, длительность в секундах, битрейт аудио в кбит/с, параметры цвета.
     """
 
     try:
+        # Извлекаем кодек
         codec = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name",
             "-of", "default=noprint_wrappers=1:nokey=1", input_file],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
 
+        # Извлекаем длительность
         duration = float(subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration",
             "-of", "default=noprint_wrappers=1:nokey=1", input_file],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip())
 
+        # Извлекаем битрейт аудио
         audio_bitrate = float(subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=bit_rate",
             "-of", "default=noprint_wrappers=1:nokey=1", input_file],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()) / 1000  # в кбит/с
-        
+
         audio_bitrate = float(SETTINGS['target_audio_bitrate']) if audio_bitrate > float(SETTINGS['target_audio_bitrate']) else audio_bitrate
 
-        return codec, duration, audio_bitrate
+        # Извлекаем параметры цвета
+        color_space = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=colorspace",
+            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+
+        color_primaries = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_primaries",
+            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+
+        color_trc = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_trc",
+            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+
+        color_range = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_range",
+            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+
+        # Логируем извлеченные параметры
+        log(f"Извлеченные параметры цвета:"
+            f"color_space -> {color_space}, "
+            f"color_primaries -> {color_primaries}, "
+            f"color_trc -> {color_trc}, "
+            f"color_range -> {color_range}. "
+            f"Для пустых параметров будут применены параметры по умолчанию.", "INFO")
+
+        # Устанавливаем значения по умолчанию, если какие-то параметры не были извлечены
+        color_space = color_space if color_space else 'bt709'
+        color_primaries = color_primaries if color_primaries else 'bt709'
+        color_trc = color_trc if color_trc else 'bt709'
+        color_range = color_range if color_range else 'limited'
+
+        return codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range
 
     except Exception as e:
         log(f"Не удалось извлечь метаданные для {input_file}: {e}", "ERROR")
-
-        return None, None, None
+        return None, None, None, None, None, None, None
 
 def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     """
@@ -158,8 +196,8 @@ def calculate_maxrate_and_bufsize(video_bitrate):
     :return: Рассчитанные значения maxrate и bufsize.
     """
 
-    maxrate = int(video_bitrate * 1.25)  # Максимальный битрейт — 1.25 раза больше обычного
-    bufsize = maxrate  # Размер буфера равен maxrate
+    maxrate = int(video_bitrate * 1.35)  # Максимальный битрейт — 1.25 раза больше обычного
+    bufsize = maxrate * 2  # Размер буфера равен maxrate
     return maxrate, bufsize
 
 # Функция для обработки видео
@@ -185,7 +223,7 @@ def process_video(input_file, base_name):
         log(f'Файл без водяной метки {no_wm_output_file} уже существует. Отсутствует файл с водяной меткой.', "WARNING")
 
     # Получение метаданных
-    codec, duration, audio_bitrate = get_video_metadata(input_file)
+    codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range = get_video_metadata(input_file)
     if codec is None:
         log(f'Не удалось получить метаданные для {input_file}', "ERROR")
         return
@@ -210,16 +248,16 @@ def process_video(input_file, base_name):
         log(f'Обработка файла с водяной меткой: {input_file}', "INFO")
         try:
             subprocess.run([
-                'ffmpeg', '-c:v', 'hevc_cuvid', '-i', input_file, '-i', static_watermark, 
-                '-pix_fmt', 'p010le', '-color_range', 'full', 
-                '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le", 
-                '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', '-b:v', f'{video_bitrate}', 
-                '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}', '-colorspace', 'bt709', '-color_primaries', 'bt709', 
-                '-color_trc', 'bt709', '-color_range', 'tv', '-rc-lookahead', '20', '-tag:v', 'hvc1', 
-                '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
-                '-map_metadata', '-1', '-metadata', f'description={description}', 
-                '-metadata', f'title={description}', output_file
-            ], check=True)
+            'ffmpeg', '-c:v', 'hevc_cuvid', '-i', input_file, '-i', static_watermark, 
+            '-pix_fmt', 'p010le', '-color_range', color_range,  # Используем параметр, извлеченный из метаданных
+            '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le", 
+            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', '-b:v', f'{video_bitrate}', 
+            '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}', '-colorspace', color_space, '-color_primaries', color_primaries, 
+            '-color_trc', color_trc, '-rc-lookahead', '20', '-tag:v', 'hvc1', 
+            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
+            '-map_metadata', '-1', '-metadata', f'description={description}', 
+            '-metadata', f'title={description}', output_file
+        ], check=True)
             log(f'Файл с водяной меткой сохранён как: {output_file}', "SUCCESS")
         except subprocess.CalledProcessError as e:
             log(f'Ошибка при обработке с водяной меткой: {e}', "ERROR")
@@ -229,15 +267,16 @@ def process_video(input_file, base_name):
         log(f'Обработка файла без водяной метки: {input_file}', "INFO")
         try:
             subprocess.run([
-                'ffmpeg', '-c:v', 'hevc_cuvid', '-i', input_file, 
-                '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', 
-                '-b:v', f'{video_bitrate}', '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}',
-                '-colorspace', 'bt709', '-color_primaries', 'bt709', 
-                '-color_trc', 'bt709', '-color_range', 'tv', '-rc-lookahead', '20', '-tag:v', 'hvc1', 
-                '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2', 
-                '-map_metadata', '-1', '-metadata', f'title={description}', '-metadata', f'description={description}', 
-                no_wm_output_file
-            ], check=True)
+            'ffmpeg', '-c:v', 'hevc_cuvid', '-i', input_file, 
+            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', 
+            '-b:v', f'{video_bitrate}', '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}',
+            '-colorspace', color_space, '-color_primaries', color_primaries, 
+            '-color_trc', color_trc, '-color_range', color_range,  # Используем параметр, извлеченный из метаданных
+            '-rc-lookahead', '20', '-tag:v', 'hvc1', 
+            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2', 
+            '-map_metadata', '-1', '-metadata', f'title={description}', '-metadata', f'description={description}', 
+            no_wm_output_file
+        ], check=True)
             log(f'Файл без водяной метки сохранён как: {no_wm_output_file}', "SUCCESS")
         except subprocess.CalledProcessError as e:
             log(f'Ошибка при обработке без водяной метки: {e}', "ERROR")
