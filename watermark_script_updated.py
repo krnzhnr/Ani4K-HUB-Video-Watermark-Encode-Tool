@@ -196,8 +196,8 @@ def calculate_maxrate_and_bufsize(video_bitrate):
     :return: Рассчитанные значения maxrate и bufsize.
     """
 
-    maxrate = int(video_bitrate * 1.35)  # Максимальный битрейт — 1.25 раза больше обычного
-    bufsize = maxrate * 2  # Размер буфера равен maxrate
+    maxrate = int(video_bitrate * 1.3)  # Максимальный битрейт — 1.25 раза больше обычного
+    bufsize = maxrate * 1.8  # Размер буфера равен maxrate
     return maxrate, bufsize
 
 # Функция для обработки видео
