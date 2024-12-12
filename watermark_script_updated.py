@@ -2,17 +2,9 @@ import os
 import subprocess
 import logging
 from colorama import Fore, init
+import yaml
 
 init(autoreset=True)
-
-# Параметры (загружаются из config.yaml)
-input_dir = '.'
-output_dir = 'WATERMARKED'
-no_wm_output_dir = 'ENCODED_NO_WM'
-static_watermark = 'Ani4KHUB.png'
-description = 'Made by Ani4K HUB | t.me/ani4k_ru'
-
-import yaml
 
 # Загрузка конфигурации
 with open('config.yaml', 'r', encoding='utf-8') as config_file:
@@ -30,13 +22,6 @@ SETTINGS = {
     "default_video_bitrate": config['default_video_bitrate'] * 10**6,  # Преобразуем из Мбит/с в биты/с,
     "target_audio_bitrate": config['target_audio_bitrate'],
 }
-
-# SETTINGS = {
-#     "threshold_minutes": 30,  # Порог длины видео (минуты), после которого применяется расчет битрейта и сжатие аудио
-#     "max_file_size_gb": 3.8,  # Максимальный размер выходного файла (ГБ)
-#     "default_video_bitrate": 12 * 10**6,  # 12(МБ) - это фиксированный битрейт для коротких видео (бит/с)
-#     "target_audio_bitrate": 256,  # Целевой битрейт аудио в кбит/с
-# }
 
 # Логирование
 log_file_path = os.path.join(os.path.dirname(__file__), "script.log")
@@ -197,7 +182,7 @@ def calculate_maxrate_and_bufsize(video_bitrate):
     """
 
     maxrate = int(video_bitrate * 1.3)  # Максимальный битрейт — 1.25 раза больше обычного
-    bufsize = maxrate * 1.8  # Размер буфера равен maxrate
+    bufsize = maxrate * 1.7  # Размер буфера равен maxrate
     return maxrate, bufsize
 
 # Функция для обработки видео
