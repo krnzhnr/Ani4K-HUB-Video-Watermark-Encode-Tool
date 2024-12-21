@@ -3,6 +3,8 @@ import subprocess
 import logging
 from colorama import Fore, init
 import yaml
+import tqdm
+import re
 
 init(autoreset=True)
 
@@ -213,6 +215,15 @@ def process_video(input_file, base_name):
         log(f'Не удалось получить метаданные для {input_file}', "ERROR")
         return
 
+    # Определяем декодер на основе кодека
+    if codec == 'hevc':  # H.265
+        decoder = 'hevc_cuvid'
+    elif codec == 'h264':  # H.264
+        decoder = 'h264_cuvid'
+    else:
+        log(f"Кодек {codec} не поддерживается GPU-декодером. Используется CPU-декодирование.", "WARNING")
+        decoder = 'auto'
+
     # Оценка размера видео и аудио
     target_size_gb = SETTINGS["max_file_size_gb"]
     if duration / 60 > SETTINGS["threshold_minutes"]:  # Если длительность видео больше порога
@@ -228,43 +239,61 @@ def process_video(input_file, base_name):
         maxrate = 100 * 10**6  # 100 Мбит
         bufsize = 200 * 10**6  # 200 Мбит
 
-    # Проверка и обработка файла с водяной меткой
+    # Добавляем прогресс-бар для команды ffmpeg
+    def run_ffmpeg_with_progress(command, total_duration):
+        progress_bar = tqdm.tqdm(total=int(total_duration), unit="s", desc="Обработка видео", dynamic_ncols=True)
+        try:
+            process = subprocess.Popen(command, stderr=subprocess.PIPE, universal_newlines=True, bufsize=1)
+            fps = 0  # Начальное значение FPS
+            for line in process.stderr:
+                # Ищем строку с прогрессом (время обработки)
+                time_match = re.search(r"time=(\d+):(\d+):(\d+.\d+)", line)
+                fps_match = re.search(r"fps=\s*(\d+)", line)  # Ищем FPS
+                if time_match:
+                    h, m, s = map(float, time_match.groups())
+                    elapsed_time = int(h * 3600 + m * 60 + s)  # Приводим к целому числу
+                    progress_bar.n = min(elapsed_time, int(total_duration))
+                    progress_bar.refresh()
+                if fps_match:
+                    fps = int(fps_match.group(1))  # Извлекаем FPS как целое число
+                progress_bar.set_postfix({"fps": fps})  # Обновляем FPS в прогресс-баре
+            process.wait()
+            if process.returncode != 0:
+                raise subprocess.CalledProcessError(process.returncode, command)
+        finally:
+            progress_bar.close()
+    
+    # Команда для видео с водяным знаком
     if not os.path.exists(output_file):
         log(f'Обработка файла с водяной меткой: {input_file}', "INFO")
-        try:
-            subprocess.run([
-            'ffmpeg', '-c:v', 'hevc_cuvid', '-i', input_file, '-i', static_watermark, 
-            '-pix_fmt', 'p010le', '-color_range', color_range,  # Используем параметр, извлеченный из метаданных
-            '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le", 
-            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', '-b:v', f'{video_bitrate}', 
-            '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}', '-colorspace', color_space, '-color_primaries', color_primaries, 
-            '-color_trc', color_trc, '-rc-lookahead', '20', '-tag:v', 'hvc1', 
+        ffmpeg_command = [
+            'ffmpeg', '-c:v', decoder if decoder != 'auto' else '', '-i', input_file, '-i', static_watermark,
+            '-pix_fmt', 'p010le', '-color_range', color_range,
+            '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
+            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', '-b:v', f'{video_bitrate}',
+            '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}', '-colorspace', color_space, '-color_primaries', color_primaries,
+            '-color_trc', color_trc, '-rc-lookahead', '20', '-tag:v', 'hvc1',
             '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
-            '-map_metadata', '-1', '-metadata', f'description={description}', 
+            '-map_metadata', '-1', '-metadata', f'description={description}',
             '-metadata', f'title={description}', output_file
-        ], check=True)
-            log(f'Файл с водяной меткой сохранён как: {output_file}', "SUCCESS")
-        except subprocess.CalledProcessError as e:
-            log(f'Ошибка при обработке с водяной меткой: {e}', "ERROR")
+        ]
+        run_ffmpeg_with_progress(ffmpeg_command, duration)
 
-    # Проверка и обработка файла без водяной метки
+    # Команда для видео без водяного знака
     if not os.path.exists(no_wm_output_file):
         log(f'Обработка файла без водяной метки: {input_file}', "INFO")
-        try:
-            subprocess.run([
-            'ffmpeg', '-c:v', 'hevc_cuvid', '-i', input_file, 
-            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', 
+        ffmpeg_command = [
+            'ffmpeg', '-c:v', decoder if decoder != 'auto' else '', '-i', input_file,
+            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10',
             '-b:v', f'{video_bitrate}', '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}',
-            '-colorspace', color_space, '-color_primaries', color_primaries, 
-            '-color_trc', color_trc, '-color_range', color_range,  # Используем параметр, извлеченный из метаданных
-            '-rc-lookahead', '20', '-tag:v', 'hvc1', 
-            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2', 
-            '-map_metadata', '-1', '-metadata', f'title={description}', '-metadata', f'description={description}', 
+            '-colorspace', color_space, '-color_primaries', color_primaries,
+            '-color_trc', color_trc, '-color_range', color_range,
+            '-rc-lookahead', '20', '-tag:v', 'hvc1',
+            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
+            '-map_metadata', '-1', '-metadata', f'title={description}', '-metadata', f'description={description}',
             no_wm_output_file
-        ], check=True)
-            log(f'Файл без водяной метки сохранён как: {no_wm_output_file}', "SUCCESS")
-        except subprocess.CalledProcessError as e:
-            log(f'Ошибка при обработке без водяной метки: {e}', "ERROR")
+        ]
+        run_ffmpeg_with_progress(ffmpeg_command, duration)
 
 # Применение функции ко всем видео в указанной директории
 processed_any = False
