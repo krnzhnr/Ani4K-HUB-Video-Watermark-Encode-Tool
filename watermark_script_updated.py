@@ -34,6 +34,7 @@ logging.basicConfig(
     encoding='utf-8'  # Устанавливаем кодировку UTF-8 для поддержки кириллицы
 )
 
+
 def log(message, level="INFO"):
     """
     Выводит сообщение в консоль с соответствующим цветом и записывает его в лог-файл.
@@ -51,6 +52,7 @@ def log(message, level="INFO"):
 # Создание выходных директорий, если они не существуют
 os.makedirs(output_dir, exist_ok=True)
 os.makedirs(no_wm_output_dir, exist_ok=True)
+
 
 def print_process_title(input_file: str):
     """Печатает разделитель с названием текущего файла."""
@@ -71,52 +73,109 @@ def get_video_metadata(input_file):
     try:
         # Извлекаем кодек
         codec = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-select_streams", "v:0", 
+                "-show_entries", "stream=codec_name",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip()
 
         # Извлекаем длительность
         duration = float(subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip())
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip())
 
         # Извлекаем битрейт аудио
         audio_bitrate = float(subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=bit_rate",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()) / 1000  # в кбит/с
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-select_streams", "a:0", 
+                "-show_entries", "stream=bit_rate",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip()) / 1000  # в кбит/с
 
         audio_bitrate = float(SETTINGS['target_audio_bitrate']) if audio_bitrate > float(SETTINGS['target_audio_bitrate']) else audio_bitrate
 
         # Извлекаем параметры цвета
         color_space = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=colorspace",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-select_streams", "v:0", 
+                "-show_entries", "stream=colorspace",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip()
 
         color_primaries = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_primaries",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-select_streams", "v:0", 
+                "-show_entries", "stream=color_primaries",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip()
 
         color_trc = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_trc",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-select_streams", "v:0", 
+                "-show_entries", "stream=color_trc",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip()
 
         color_range = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=color_range",
-            "-of", "default=noprint_wrappers=1:nokey=1", input_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout.decode().strip()
+            [
+                "ffprobe", 
+                "-v", "error", 
+                "-select_streams", "v:0", 
+                "-show_entries", "stream=color_range",
+                "-of", "default=noprint_wrappers=1:nokey=1", 
+                input_file
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            
+            ).stdout.decode().strip()
 
         # Логируем извлеченные параметры
-        log(f"Извлеченные параметры цвета:"
+        log(
+            f"Извлеченные параметры цвета:"
             f"color_space -> {color_space}, "
             f"color_primaries -> {color_primaries}, "
             f"color_trc -> {color_trc}, "
             f"color_range -> {color_range}. "
-            f"Для пустых параметров будут применены параметры по умолчанию.", "INFO")
+            f"Для пустых параметров будут применены параметры по умолчанию.", "INFO"
+            )
 
         # Устанавливаем значения по умолчанию, если какие-то параметры не были извлечены
         color_space = color_space if color_space else 'bt709'
@@ -129,6 +188,7 @@ def get_video_metadata(input_file):
     except Exception as e:
         log(f"Не удалось извлечь метаданные для {input_file}: {e}", "ERROR")
         return None, None, None, None, None, None, None
+
 
 def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     """
@@ -145,6 +205,7 @@ def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     audio_size = (audio_bitrate * duration) / (8 * 1024)  # в МБ
     
     return video_size, audio_size
+
 
 def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate, target_size_gb, video_bitrate):
     """
@@ -175,7 +236,8 @@ def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate
             maxrate_mbit = maxrate / 1000000
             current_video_bitrate_mbit = current_video_bitrate / 1000000
             bufsize_mbit = bufsize / 1000000
-            log(f"Целевой размер достигнут: {total_size / (1024**3):.2f} GB. Битрейт (Мбит) max/min/avg: {maxrate_mbit:.2f}/0/{current_video_bitrate_mbit:.2f}, "
+            log(f"Целевой размер достигнут: {total_size / (1024**3):.2f} GB. "
+                f"Битрейт (Мбит) max/min/avg: {maxrate_mbit:.2f}/0/{current_video_bitrate_mbit:.2f}, "
                 f"размер буфера: {bufsize_mbit:.2f} Мбит.", "SUCCESS")
             break
         else:
@@ -184,6 +246,7 @@ def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate
             log(f"Снижение битрейта до {current_video_bitrate / 10**6:.2f} Mbps для достижения целевого размера.", "WARNING")
 
     return current_video_bitrate
+
 
 def calculate_maxrate_and_bufsize(video_bitrate):
     """
@@ -196,6 +259,7 @@ def calculate_maxrate_and_bufsize(video_bitrate):
     maxrate = int(video_bitrate * 1.3)  # Максимальный битрейт — 1.25 раза больше обычного
     bufsize = maxrate * 1.7  # Размер буфера равен maxrate
     return maxrate, bufsize
+
 
 # Функция для обработки видео
 def process_video(input_file, base_name):
@@ -237,13 +301,16 @@ def process_video(input_file, base_name):
     # Оценка размера видео и аудио
     target_size_gb = SETTINGS["max_file_size_gb"]
     if duration / 60 > SETTINGS["threshold_minutes"]:  # Если длительность видео больше порога
-        log(f"Длина видео превышает {SETTINGS['threshold_minutes']} минут. Расчет битрейта для достижения целевого размера...", "INFO")
-        video_bitrate = adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate, target_size_gb, SETTINGS["default_video_bitrate"])
+        log(f"Длина видео превышает {SETTINGS['threshold_minutes']} минут. "
+            f"Расчет битрейта для достижения целевого размера...", "INFO")
+        video_bitrate = adjust_bitrate_to_size(
+            input_file, static_watermark, duration, audio_bitrate, target_size_gb, SETTINGS["default_video_bitrate"])
 
         # Рассчитываем maxrate и bufsize только для адаптированного битрейта
         maxrate, bufsize = calculate_maxrate_and_bufsize(video_bitrate)
     else:
-        log(f"Длина видео менее {SETTINGS['threshold_minutes']} минут. Установка битрейта(Мбит/с) max/min/avg: 100/0/12, размер буфера: 200 Мбит...", "INFO")
+        log(f"Длина видео менее {SETTINGS['threshold_minutes']} минут. "
+            f"Установка битрейта(Мбит/с) max/min/avg: 100/0/12, размер буфера: 200 Мбит...", "INFO")
         # Для коротких видео устанавливаем стандартный битрейт
         video_bitrate = SETTINGS["default_video_bitrate"]
         maxrate = 100 * 10**6  # 100 Мбит
@@ -278,39 +345,76 @@ def process_video(input_file, base_name):
     # Команда для видео с водяным знаком
     if not os.path.exists(output_file):
         log(f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4', "INFO")
+        
         ffmpeg_command = [
-            'ffmpeg', '-c:v', decoder if decoder != 'auto' else '', '-i', input_file, '-i', static_watermark,
-            '-pix_fmt', 'p010le', '-color_range', color_range,
+            'ffmpeg', 
+            '-c:v', decoder if decoder != 'auto' else '', 
+            '-i', input_file, 
+            '-i', static_watermark,
+            '-pix_fmt', 'p010le', 
+            '-color_range', color_range,
             '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
-            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10', '-b:v', f'{video_bitrate}',
-            '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}', '-colorspace', color_space, '-color_primaries', color_primaries,
-            '-color_trc', color_trc, '-rc-lookahead', '20', '-tag:v', 'hvc1',
-            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
-            '-map_metadata', '-1', '-metadata', f'description={description}',
+            '-c:v', 'hevc_nvenc', 
+            '-preset', 'p7', 
+            '-profile:v', 'main10', 
+            '-b:v', f'{video_bitrate}',
+            '-maxrate', f'{maxrate}', 
+            '-bufsize', f'{bufsize}', 
+            '-colorspace', color_space, 
+            '-color_primaries', color_primaries,
+            '-color_trc', color_trc, 
+            '-rc-lookahead', '20', 
+            '-tag:v', 'hvc1',
+            '-movflags', '+faststart', 
+            '-c:a', 'aac', 
+            '-b:a', f"{audio_bitrate}k", 
+            '-ac', '2',
+            '-map_metadata', '-1', 
+            '-metadata', f'description={description}',
             '-metadata', f'title={description}', output_file
         ]
+
         run_ffmpeg_with_progress(ffmpeg_command, duration)
 
     # Команда для видео без водяного знака
     if not os.path.exists(no_wm_output_file):
         log(f'\nОбработка файла без водяной метки: {base_name}_wwm.mp4', "INFO")
+        
         ffmpeg_command = [
-            'ffmpeg', '-c:v', decoder if decoder != 'auto' else '', '-i', input_file,
-            '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10',
-            '-b:v', f'{video_bitrate}', '-maxrate', f'{maxrate}', '-bufsize', f'{bufsize}',
-            '-colorspace', color_space, '-color_primaries', color_primaries,
-            '-color_trc', color_trc, '-color_range', color_range,
-            '-rc-lookahead', '20', '-tag:v', 'hvc1',
-            '-movflags', '+faststart', '-c:a', 'aac', '-b:a', f"{audio_bitrate}k", '-ac', '2',
-            '-map_metadata', '-1', '-metadata', f'title={description}', '-metadata', f'description={description}',
+            'ffmpeg', 
+            '-c:v', decoder if decoder != 'auto' else '', 
+            '-i', input_file,
+            '-c:v', 'hevc_nvenc', 
+            '-preset', 'p7', 
+            '-profile:v', 'main10',
+            '-b:v', f'{video_bitrate}', 
+            '-maxrate', f'{maxrate}', 
+            '-bufsize', f'{bufsize}',
+            '-colorspace', color_space, 
+            '-color_primaries', color_primaries,
+            '-color_trc', color_trc, 
+            '-color_range', color_range,
+            '-rc-lookahead', '20', 
+            '-tag:v', 'hvc1',
+            '-movflags', '+faststart', 
+            '-c:a', 'aac', 
+            '-b:a', f"{audio_bitrate}k", 
+            '-ac', '2',
+            '-map_metadata', '-1', 
+            '-metadata', f'title={description}', 
+            '-metadata', f'description={description}',
             no_wm_output_file
         ]
+
         run_ffmpeg_with_progress(ffmpeg_command, duration)
+
 
 # Применение функции ко всем видео в указанной директории
 processed_any = False
+
 for file in os.listdir(input_dir):
     file_path = os.path.join(input_dir, file)
+    
     if os.path.isfile(file_path) and file.lower().endswith(('mkv', 'mp4', 'avi')):
         base_name = os.path.splitext(file)[0]
         process_video(file_path, base_name)
