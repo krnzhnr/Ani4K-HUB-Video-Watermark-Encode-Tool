@@ -1,7 +1,7 @@
 import os
 import subprocess
 import logging
-from colorama import Fore, init
+from colorama import Fore, Style, init
 import yaml
 import tqdm
 import re
@@ -41,13 +41,23 @@ def log(message, level="INFO"):
     :param message: Сообщение, которое нужно вывести.
     :param level: Уровень логирования, может быть "INFO", "SUCCESS", "WARNING", "ERROR".
     """
-    color_map = {"INFO": Fore.BLUE, "SUCCESS": Fore.GREEN, "WARNING": Fore.YELLOW, "ERROR": Fore.RED}
+    color_map = {"INFO": Style.BRIGHT + Fore.BLUE, 
+                "SUCCESS": Fore.GREEN, 
+                "WARNING": Fore.YELLOW, 
+                "ERROR": Fore.RED}
     print(color_map.get(level, Fore.WHITE) + message)
     getattr(logging, level.lower(), logging.info)(message)
 
 # Создание выходных директорий, если они не существуют
 os.makedirs(output_dir, exist_ok=True)
 os.makedirs(no_wm_output_dir, exist_ok=True)
+
+def print_process_title(input_file: str):
+    """Печатает разделитель с названием текущего файла."""
+    print(f"\n{Fore.CYAN}{'=' * 100}")
+    print(f"{Fore.YELLOW}Обработка файла: {input_file}")
+    print(f"{Fore.CYAN}{'=' * 100}\n")
+
 
 def get_video_metadata(input_file):
     """
@@ -263,9 +273,11 @@ def process_video(input_file, base_name):
         finally:
             progress_bar.close()
     
+    print_process_title(input_file)
+    
     # Команда для видео с водяным знаком
     if not os.path.exists(output_file):
-        log(f'Обработка файла с водяной меткой: {input_file}', "INFO")
+        log(f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4', "INFO")
         ffmpeg_command = [
             'ffmpeg', '-c:v', decoder if decoder != 'auto' else '', '-i', input_file, '-i', static_watermark,
             '-pix_fmt', 'p010le', '-color_range', color_range,
@@ -281,7 +293,7 @@ def process_video(input_file, base_name):
 
     # Команда для видео без водяного знака
     if not os.path.exists(no_wm_output_file):
-        log(f'Обработка файла без водяной метки: {input_file}', "INFO")
+        log(f'\nОбработка файла без водяной метки: {base_name}_wwm.mp4', "INFO")
         ffmpeg_command = [
             'ffmpeg', '-c:v', decoder if decoder != 'auto' else '', '-i', input_file,
             '-c:v', 'hevc_nvenc', '-preset', 'p7', '-profile:v', 'main10',
