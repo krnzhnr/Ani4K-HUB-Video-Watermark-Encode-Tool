@@ -34,7 +34,6 @@ logging.basicConfig(
     encoding='utf-8'  # Устанавливаем кодировку UTF-8 для поддержки кириллицы
 )
 
-
 def log(message, level="INFO"):
     """
     Выводит сообщение в консоль с соответствующим цветом и записывает его в лог-файл.
@@ -53,13 +52,11 @@ def log(message, level="INFO"):
 os.makedirs(output_dir, exist_ok=True)
 os.makedirs(no_wm_output_dir, exist_ok=True)
 
-
 def print_process_title(input_file: str):
     """Печатает разделитель с названием текущего файла."""
     print(f"\n{Fore.CYAN}{'=' * 100}")
     print(f"{Fore.YELLOW}Обработка файла: {input_file}")
     print(f"{Fore.CYAN}{'=' * 100}\n")
-
 
 def get_video_metadata(input_file):
     """
@@ -69,7 +66,6 @@ def get_video_metadata(input_file):
     :param input_file: Путь к видеофайлу.
     :return: Кодек видео, длительность в секундах, битрейт аудио в кбит/с, параметры цвета.
     """
-
     try:
         # Извлекаем кодек
         codec = subprocess.run(
@@ -82,7 +78,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip()
 
         # Извлекаем длительность
@@ -95,7 +90,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip())
 
         # Извлекаем битрейт аудио
@@ -109,7 +103,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip()) / 1000  # в кбит/с
 
         audio_bitrate = float(SETTINGS['target_audio_bitrate']) if audio_bitrate > float(SETTINGS['target_audio_bitrate']) else audio_bitrate
@@ -125,7 +118,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip()
 
         color_primaries = subprocess.run(
@@ -138,7 +130,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip()
 
         color_trc = subprocess.run(
@@ -151,7 +142,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip()
 
         color_range = subprocess.run(
@@ -164,7 +154,6 @@ def get_video_metadata(input_file):
                 input_file
             ],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            
             ).stdout.decode().strip()
 
         # Логируем извлеченные параметры
@@ -189,7 +178,6 @@ def get_video_metadata(input_file):
         log(f"Не удалось извлечь метаданные для {input_file}: {e}", "ERROR")
         return None, None, None, None, None, None, None
 
-
 def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     """
     Оценивает размеры видео и аудиопотоков на основе длительности видео и битрейтов.
@@ -199,13 +187,11 @@ def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     :param audio_bitrate: Битрейт аудио в кбит/с. Если None, используется target_audio_bitrate.
     :return: Размер видео и аудио потоков в МБ.
     """
-    
     audio_bitrate = SETTINGS["target_audio_bitrate"] or audio_bitrate  # Используем целевой битрейт, если текущий не указан
     video_size = (video_bitrate * duration) / (8 * 1024 * 1024)  # в МБ
     audio_size = (audio_bitrate * duration) / (8 * 1024)  # в МБ
     
     return video_size, audio_size
-
 
 def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate, target_size_gb, video_bitrate):
     """
@@ -219,7 +205,6 @@ def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate
     :param video_bitrate: Начальный битрейт видео в бит/с.
     :return: Адаптированный битрейт видео в бит/с.
     """
-
     target_size_bytes = target_size_gb * 1024 * 1024 * 1024  # целевой размер в байтах
     current_video_bitrate = video_bitrate
 
@@ -247,7 +232,6 @@ def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate
 
     return current_video_bitrate
 
-
 def calculate_maxrate_and_bufsize(video_bitrate):
     """
     Рассчитывает оптимальные значения для maxrate и bufsize на основе переданного битрейта видео.
@@ -255,48 +239,161 @@ def calculate_maxrate_and_bufsize(video_bitrate):
     :param video_bitrate: Битрейт видео в бит/с.
     :return: Рассчитанные значения maxrate и bufsize.
     """
-
     maxrate = int(video_bitrate * 1.2)  # Максимальный битрейт — 1.25 раза больше обычного
     bufsize = maxrate * 1.6  # Размер буфера равен maxrate
     return maxrate, bufsize
 
-
-# Функция для обработки видео
-def process_video(input_file, base_name):
+def run_ffmpeg_with_progress(command, total_duration):
     """
-    Обрабатывает видеофайл, добавляя водяной знак (если нужно) и сжимая его для соответствия целевому размеру файла.
-    Создает два варианта: с водяным знаком и без.
+    Запускает команду ffmpeg с прогресс-баром.
+
+    :param command: Команда для выполнения.
+    :param total_duration: Общая длительность видео в секундах.
+    """
+    progress_bar = tqdm.tqdm(total=int(total_duration), unit="s", desc="Обработка видео", dynamic_ncols=True)
+    try:
+        process = subprocess.Popen(command, stderr=subprocess.PIPE, universal_newlines=True, bufsize=1)
+        fps = 0  # Начальное значение FPS
+        for line in process.stderr:
+            # Ищем строку с прогрессом (время обработки)
+            time_match = re.search(r"time=(\d+):(\d+):(\d+.\d+)", line)
+            fps_match = re.search(r"fps=\s*(\d+)", line)  # Ищем FPS
+            if time_match:
+                h, m, s = map(float, time_match.groups())
+                elapsed_time = int(h * 3600 + m * 60 + s)  # Приводим к целому числу
+                progress_bar.n = min(elapsed_time, int(total_duration))
+                progress_bar.refresh()
+            if fps_match:
+                fps = int(fps_match.group(1))  # Извлекаем FPS как целое число
+            progress_bar.set_postfix({"fps": fps})  # Обновляем FPS в прогресс-баре
+        process.wait()
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, command)
+    finally:
+        progress_bar.close()
+
+def process_video_with_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize):
+    """
+    Обрабатывает видео с добавлением водяного знака.
 
     :param input_file: Путь к входному видеофайлу.
-    :param base_name: Базовое имя выходного файла, используется для формирования имён с водяным знаком и без.
+    :param base_name: Базовое имя выходного файла.
+    :param codec: Кодек видео.
+    :param duration: Длительность видео в секундах.
+    :param audio_bitrate: Битрейт аудио в кбит/с.
+    :param color_space: Цветовое пространство.
+    :param color_primaries: Основные цвета.
+    :param color_trc: Цветовая передача.
+    :param color_range: Диапазон цвета.
+    :param video_bitrate: Битрейт видео в бит/с.
+    :param maxrate: Максимальный битрейт.
+    :param bufsize: Размер буфера.
     """
-
     output_file = os.path.join(output_dir, f'[TG - Ani4K] {base_name}_watermarked.mp4')
+
+    if os.path.exists(output_file):
+        log(f'Файл с водяной меткой {output_file} уже существует. Пропускаем обработку.', "INFO")
+        return
+
+    log(f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4', "INFO")
+
+    ffmpeg_command = [
+        'ffmpeg',
+        '-hwaccel', 'cuda',  # Используем CUDA для ускорения декодирования
+        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid', 
+        '-i', input_file, 
+        '-i', static_watermark,
+        '-pix_fmt', 'yuv420p10le',
+        '-color_range', color_range,
+        '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
+        '-c:v', 'hevc_nvenc', 
+        '-preset', 'p7', 
+        '-profile:v', 'main10', 
+        '-b:v', f'{video_bitrate}',
+        '-maxrate', f'{maxrate}', 
+        '-bufsize', f'{bufsize}', 
+        '-colorspace', color_space, 
+        '-color_primaries', color_primaries,
+        '-color_trc', color_trc, 
+        '-rc-lookahead', '20', 
+        '-tag:v', 'hvc1',
+        '-movflags', '+faststart', 
+        '-c:a', 'aac', 
+        '-b:a', f"{audio_bitrate}k", 
+        '-ac', '2',
+        '-map_metadata', '-1', 
+        '-metadata', f'description={description}',
+        '-metadata', f'title={description}', output_file
+    ]
+
+    run_ffmpeg_with_progress(ffmpeg_command, duration)
+
+def process_video_without_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize):
+    """
+    Обрабатывает видео без добавления водяного знака.
+
+    :param input_file: Путь к входному видеофайлу.
+    :param base_name: Базовое имя выходного файла.
+    :param codec: Кодек видео.
+    :param duration: Длительность видео в секундах.
+    :param audio_bitrate: Битрейт аудио в кбит/с.
+    :param color_space: Цветовое пространство.
+    :param color_primaries: Основные цвета.
+    :param color_trc: Цветовая передача.
+    :param color_range: Диапазон цвета.
+    :param video_bitrate: Битрейт видео в бит/с.
+    :param maxrate: Максимальный битрейт.
+    :param bufsize: Размер буфера.
+    """
     no_wm_output_file = os.path.join(no_wm_output_dir, f'[TG - Ani4K] {base_name}_wwm.mp4')
 
-    # Проверка существования выходных файлов
-    if os.path.exists(output_file) and os.path.exists(no_wm_output_file):
-        log(f'Оба файла для {base_name} уже существуют. Пропускаем обработку.', "INFO")
+    if os.path.exists(no_wm_output_file):
+        log(f'Файл без водяной метки {no_wm_output_file} уже существует. Пропускаем обработку.', "INFO")
         return
-    elif os.path.exists(output_file):
-        log(f'Файл с водяной меткой {output_file} уже существует. Отсутствует файл без водяной метки.', "WARNING")
-    elif os.path.exists(no_wm_output_file):
-        log(f'Файл без водяной метки {no_wm_output_file} уже существует. Отсутствует файл с водяной меткой.', "WARNING")
 
+    log(f'Обработка файла без водяной метки: {base_name}_wwm.mp4', "INFO")
+
+    ffmpeg_command = [
+        'ffmpeg', 
+        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid', 
+        '-i', input_file,
+        '-c:v', 'hevc_nvenc', 
+        '-preset', 'p7', 
+        '-profile:v', 'main10',
+        '-b:v', f'{video_bitrate}', 
+        '-maxrate', f'{maxrate}', 
+        '-bufsize', f'{bufsize}',
+        '-colorspace', color_space, 
+        '-color_primaries', color_primaries,
+        '-color_trc', color_trc, 
+        '-color_range', color_range,
+        '-rc-lookahead', '20', 
+        '-tag:v', 'hvc1',
+        '-movflags', '+faststart', 
+        '-c:a', 'aac', 
+        '-b:a', f"{audio_bitrate}k", 
+        '-ac', '2',
+        '-map_metadata', '-1', 
+        '-metadata', f'title={description}', 
+        '-metadata', f'description={description}',
+        no_wm_output_file
+    ]
+
+    run_ffmpeg_with_progress(ffmpeg_command, duration)
+
+def process_video(input_file, base_name, mode):
+    """
+    Обрабатывает видеофайл в зависимости от выбранного режима.
+
+    :param input_file: Путь к входному видеофайлу.
+    :param base_name: Базовое имя выходного файла.
+    :param mode: Режим обработки (1 - с водяным знаком и без, 2 - только с водяным знаком).
+    """
     # Получение метаданных
     codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range = get_video_metadata(input_file)
     if codec is None:
         log(f'Не удалось получить метаданные для {input_file}', "ERROR")
         return
-
-    # Определяем декодер на основе кодека
-    if codec == 'hevc':  # H.265
-        decoder = 'hevc_cuvid'
-    elif codec == 'h264':  # H.264
-        decoder = 'h264_cuvid'
-    else:
-        log(f"Кодек {codec} не поддерживается GPU-декодером. Используется CPU-декодирование.", "WARNING")
-        decoder = 'auto'
 
     # Оценка размера видео и аудио
     target_size_gb = SETTINGS["max_file_size_gb"]
@@ -316,113 +413,47 @@ def process_video(input_file, base_name):
         maxrate = 100 * 10**6  # 100 Мбит
         bufsize = 200 * 10**6  # 200 Мбит
 
-    # Добавляем прогресс-бар для команды ffmpeg
-    def run_ffmpeg_with_progress(command, total_duration):
-        progress_bar = tqdm.tqdm(total=int(total_duration), unit="s", desc="Обработка видео", dynamic_ncols=True)
-        try:
-            process = subprocess.Popen(command, stderr=subprocess.PIPE, universal_newlines=True, bufsize=1)
-            fps = 0  # Начальное значение FPS
-            for line in process.stderr:
-                # Ищем строку с прогрессом (время обработки)
-                time_match = re.search(r"time=(\d+):(\d+):(\d+.\d+)", line)
-                fps_match = re.search(r"fps=\s*(\d+)", line)  # Ищем FPS
-                if time_match:
-                    h, m, s = map(float, time_match.groups())
-                    elapsed_time = int(h * 3600 + m * 60 + s)  # Приводим к целому числу
-                    progress_bar.n = min(elapsed_time, int(total_duration))
-                    progress_bar.refresh()
-                if fps_match:
-                    fps = int(fps_match.group(1))  # Извлекаем FPS как целое число
-                progress_bar.set_postfix({"fps": fps})  # Обновляем FPS в прогресс-баре
-            process.wait()
-            if process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, command)
-        finally:
-            progress_bar.close()
-    
     print_process_title(input_file)
-    
-    # Команда для видео с водяным знаком
-    if not os.path.exists(output_file):
-        log(f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4', "INFO")
+
+    if mode == 1:
+        # Обработка с водяным знаком и без
+        process_video_with_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize)
+        process_video_without_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize)
+    elif mode == 2:
+        # Обработка только с водяным знаком
+        process_video_with_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize)
+    else:
+        log("Неверный режим обработки. Выберите 1 или 2.", "ERROR")
+
+def main():
+    """
+    Основная функция, которая запускает скрипт и обрабатывает видео в зависимости от выбранного режима.
+    """
+    print("Выберите режим обработки:")
+    print("1 - Обработка всех видео в двух вариантах: с водяным знаком и без")
+    print("2 - Обработка только с водяным знаком")
+    mode = int(input("Введите номер режима: "))
+
+    if mode not in [1, 2]:
+        log("Неверный режим обработки. Выберите 1 или 2.", "ERROR")
+        return
+
+    processed_any = False
+
+    for file in os.listdir(input_dir):
+        file_path = os.path.join(input_dir, file)
         
-        ffmpeg_command = [
-            'ffmpeg', 
-            '-c:v', decoder if decoder != 'auto' else '', 
-            '-i', input_file, 
-            '-i', static_watermark,
-            '-pix_fmt', 'p010le', 
-            '-color_range', color_range,
-            '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
-            '-c:v', 'hevc_nvenc', 
-            '-preset', 'p7', 
-            '-profile:v', 'main10', 
-            '-b:v', f'{video_bitrate}',
-            '-maxrate', f'{maxrate}', 
-            '-bufsize', f'{bufsize}', 
-            '-colorspace', color_space, 
-            '-color_primaries', color_primaries,
-            '-color_trc', color_trc, 
-            '-rc-lookahead', '20', 
-            '-tag:v', 'hvc1',
-            '-movflags', '+faststart', 
-            '-c:a', 'aac', 
-            '-b:a', f"{audio_bitrate}k", 
-            '-ac', '2',
-            '-map_metadata', '-1', 
-            '-metadata', f'description={description}',
-            '-metadata', f'title={description}', output_file
-        ]
+        if os.path.isfile(file_path) and file.lower().endswith(('mkv', 'mp4', 'avi')):
+            base_name = os.path.splitext(file)[0]
+            process_video(file_path, base_name, mode)
+            processed_any = True
 
-        run_ffmpeg_with_progress(ffmpeg_command, duration)
+    if not processed_any:
+        log("Не найдено файлов для обработки.", "INFO")
 
-    # Команда для видео без водяного знака
-    if not os.path.exists(no_wm_output_file):
-        log(f'\nОбработка файла без водяной метки: {base_name}_wwm.mp4', "INFO")
-        
-        ffmpeg_command = [
-            'ffmpeg', 
-            '-c:v', decoder if decoder != 'auto' else '', 
-            '-i', input_file,
-            '-c:v', 'hevc_nvenc', 
-            '-preset', 'p7', 
-            '-profile:v', 'main10',
-            '-b:v', f'{video_bitrate}', 
-            '-maxrate', f'{maxrate}', 
-            '-bufsize', f'{bufsize}',
-            '-colorspace', color_space, 
-            '-color_primaries', color_primaries,
-            '-color_trc', color_trc, 
-            '-color_range', color_range,
-            '-rc-lookahead', '20', 
-            '-tag:v', 'hvc1',
-            '-movflags', '+faststart', 
-            '-c:a', 'aac', 
-            '-b:a', f"{audio_bitrate}k", 
-            '-ac', '2',
-            '-map_metadata', '-1', 
-            '-metadata', f'title={description}', 
-            '-metadata', f'description={description}',
-            no_wm_output_file
-        ]
+    # Завершение работы
+    log("Все файлы уже обработаны или пропущены.", "SUCCESS")
+    input("Нажмите Enter для выхода...")
 
-        run_ffmpeg_with_progress(ffmpeg_command, duration)
-
-
-# Применение функции ко всем видео в указанной директории
-processed_any = False
-
-for file in os.listdir(input_dir):
-    file_path = os.path.join(input_dir, file)
-    
-    if os.path.isfile(file_path) and file.lower().endswith(('mkv', 'mp4', 'avi')):
-        base_name = os.path.splitext(file)[0]
-        process_video(file_path, base_name)
-        processed_any = True
-
-if not processed_any:
-    log("Не найдено файлов для обработки.", "INFO")
-
-# Завершение работы
-log("Все файлы уже обработаны или пропущены.", "SUCCESS")
-input("Нажмите Enter для выхода...")
+if __name__ == "__main__":
+    main()
