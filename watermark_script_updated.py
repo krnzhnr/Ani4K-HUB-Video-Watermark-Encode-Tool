@@ -289,7 +289,7 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     :param maxrate: Максимальный битрейт.
     :param bufsize: Размер буфера.
     """
-    output_file = os.path.join(output_dir, f'[TG - Ani4K] {base_name}_watermarked.mp4')
+    output_file = os.path.join(output_dir, f'[Ani4KHUB] {base_name}_watermarked.mp4')
 
     if os.path.exists(output_file):
         log(f'Файл с водяной меткой {output_file} уже существует. Пропускаем обработку.', "INFO")
@@ -298,33 +298,82 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     log(f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4', "INFO")
 
     ffmpeg_command = [
-        'ffmpeg',
-        '-hwaccel', 'cuda',  # Используем CUDA для ускорения декодирования
-        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid', 
-        '-i', input_file, 
-        '-i', static_watermark,
-        '-pix_fmt', 'yuv420p10le',
-        '-color_range', color_range,
-        '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09[scaled_static];[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
-        '-c:v', 'hevc_nvenc', 
-        '-preset', 'p7', 
-        '-profile:v', 'main10', 
-        '-b:v', f'{video_bitrate}',
-        '-maxrate', f'{maxrate}', 
-        '-bufsize', f'{bufsize}', 
-        '-colorspace', color_space, 
-        '-color_primaries', color_primaries,
-        '-color_trc', color_trc, 
-        '-rc-lookahead', '20', 
-        '-tag:v', 'hvc1',
-        '-movflags', '+faststart', 
-        '-c:a', 'aac', 
-        '-b:a', f"{audio_bitrate}k", 
-        '-ac', '2',
-        '-map_metadata', '-1', 
-        '-metadata', f'description={description}',
-        '-metadata', f'title={description}', output_file
+        "ffmpeg",
+        "-hwaccel", "cuda",
+        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid',
+        "-i", input_file,
+        "-i", static_watermark,
+        "-pix_fmt", "yuv420p10le",
+        "-color_range", color_range,
+        "-filter_complex", "[1:v]scale=iw*0.09:ih*0.09[wm];[0:v][wm]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
+        "-c:v", "hevc_nvenc",
+        "-preset", "p7",
+        "-profile:v", "main10",
+        "-b:v", f"{video_bitrate}",
+        "-maxrate", f"{maxrate}",
+        "-bufsize", f"{bufsize}",
+        "-rc", "vbr",  # Улучшенное управление битрейтом
+        "-aq-strength", "15",  # Улучшает качество сложных текстур
+        "-spatial-aq", "1",  # Улучшает статичные сцены
+        "-temporal-aq", "1",  # Улучшает динамические сцены
+        "-rc-lookahead", "32",  # Глубокий анализ сцен для лучшего качества
+        "-colorspace", color_space,
+        "-color_primaries", color_primaries,
+        "-color_trc", color_trc,
+        "-tag:v", "hvc1",
+        "-movflags", "+faststart",
+        "-c:a", "aac",
+        "-b:a", f"{audio_bitrate}k",
+        "-ac", "2",
+        "-map_metadata", "-1",
+        "-metadata", f"description={description}",
+        "-metadata", f"title={description}",
+        output_file
     ]
+    
+    ffmpeg_commands = [
+    'ffmpeg',
+    '-hwaccel', 'cuda',
+    '-c:v', 'libaom-av1',
+    '-i', input_file,
+    '-i', static_watermark,
+    '-pix_fmt', 'yuv420p10le',
+    '-color_range', color_range,
+    '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09:flags=lanczos[scaled_static];"
+                        "[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,"
+                        "gradfun=3:30,format=yuv420p10le",
+    '-preset', 'p7',  # Максимальное качество
+    '-b:v', f'{video_bitrate}',  
+    '-maxrate', f'{maxrate}',  
+    '-bufsize', f'{bufsize}',  
+    '-colorspace', color_space,
+    '-color_primaries', color_primaries,
+    '-color_trc', color_trc,
+    # '-spatial-aq', '1',
+    # '-temporal-aq', '1',
+    # '-aq-strength', '20',  # Максимальная адаптивная компрессия
+    # '-rc', 'vbr',
+    # '-cq', '16',  # Чистейшее качество (можно пробовать 14 или 12)
+    # '-multipass', 'fullres',  
+    # '-bf', '7',
+    # '-refs', '7',
+    # '-g', '500',
+    # '-rc-lookahead', '64',
+    # '-deblock', '-3:-3',
+    # '-tag:v', 'av01',
+    '-movflags', '+faststart',
+    '-c:a', 'aac',
+    '-b:a', f"{int(audio_bitrate)}k",
+    '-ac', '2',
+    '-map_metadata', '-1',
+    '-metadata', f'description={description}',
+    '-metadata', f'title={description}',
+    output_file
+]
+
+
+
+
 
     run_ffmpeg_with_progress(ffmpeg_command, duration)
 
@@ -345,7 +394,7 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
     :param maxrate: Максимальный битрейт.
     :param bufsize: Размер буфера.
     """
-    no_wm_output_file = os.path.join(no_wm_output_dir, f'[TG - Ani4K] {base_name}_wwm.mp4')
+    no_wm_output_file = os.path.join(no_wm_output_dir, f'[Ani4KHUB] {base_name}_wwm.mp4')
 
     if os.path.exists(no_wm_output_file):
         log(f'Файл без водяной метки {no_wm_output_file} уже существует. Пропускаем обработку.', "INFO")
@@ -354,28 +403,32 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
     log(f'Обработка файла без водяной метки: {base_name}_wwm.mp4', "INFO")
 
     ffmpeg_command = [
-        'ffmpeg', 
-        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid', 
-        '-i', input_file,
-        '-c:v', 'hevc_nvenc', 
-        '-preset', 'p7', 
-        '-profile:v', 'main10',
-        '-b:v', f'{video_bitrate}', 
-        '-maxrate', f'{maxrate}', 
-        '-bufsize', f'{bufsize}',
-        '-colorspace', color_space, 
-        '-color_primaries', color_primaries,
-        '-color_trc', color_trc, 
-        '-color_range', color_range,
-        '-rc-lookahead', '20', 
-        '-tag:v', 'hvc1',
-        '-movflags', '+faststart', 
-        '-c:a', 'aac', 
-        '-b:a', f"{audio_bitrate}k", 
-        '-ac', '2',
-        '-map_metadata', '-1', 
-        '-metadata', f'title={description}', 
-        '-metadata', f'description={description}',
+        "ffmpeg",
+        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid',
+        "-i", input_file,
+        "-c:v", "hevc_nvenc",
+        "-preset", "p7",
+        "-profile:v", "main10",
+        "-b:v", f"{video_bitrate}",
+        "-maxrate", f"{maxrate}",
+        "-bufsize", f"{bufsize}",
+        "-rc", "vbr",  # Улучшенный контроль битрейта
+        "-aq-strength", "15",  # Улучшает детализацию сложных текстур
+        "-spatial-aq", "1",  # Улучшает качество статичных сцен
+        "-temporal-aq", "1",  # Улучшает динамичные сцены
+        "-rc-lookahead", "32",  # Анализирует 32 кадра вперёд (максимум для HEVC)
+        "-colorspace", color_space,
+        "-color_primaries", color_primaries,
+        "-color_trc", color_trc,
+        "-color_range", color_range,
+        "-tag:v", "hvc1",
+        "-movflags", "+faststart",
+        "-c:a", "aac",
+        "-b:a", f"{audio_bitrate}k",
+        "-ac", "2",
+        "-map_metadata", "-1",
+        "-metadata", f"title={description}",
+        "-metadata", f"description={description}",
         no_wm_output_file
     ]
 
