@@ -252,7 +252,15 @@ def run_ffmpeg_with_progress(command, total_duration):
     """
     progress_bar = tqdm.tqdm(total=int(total_duration), unit="s", desc="Обработка видео", dynamic_ncols=True)
     try:
-        process = subprocess.Popen(command, stderr=subprocess.PIPE, universal_newlines=True, bufsize=1)
+        # Явно указываем кодировку и обработку ошибок
+        process = subprocess.Popen(
+            command,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            bufsize=1,
+            encoding='utf-8',       # Используем UTF-8
+            errors='replace'         # Заменяем неподдерживаемые символы
+        )
         fps = 0  # Начальное значение FPS
         for line in process.stderr:
             # Ищем строку с прогрессом (время обработки)
@@ -300,12 +308,23 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     ffmpeg_command = [
         "ffmpeg",
         "-hwaccel", "cuda",
-        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid',
+        "-c:v", (
+            "auto" if codec not in ["hevc", "h264"]
+            else "hevc_cuvid" if codec == "hevc"
+            else "h264_cuvid"
+        ),
         "-i", input_file,
         "-i", static_watermark,
         "-pix_fmt", "yuv420p10le",
         "-color_range", color_range,
-        "-filter_complex", "[1:v]scale=iw*0.09:ih*0.09[wm];[0:v][wm]overlay=x='main_w-w-68':y='64':format=auto,gradfun=2.5:24,format=yuv420p10le",
+        "-filter_complex", (
+            "[1:v]scale=iw*0.09:ih*0.09,"
+            "format=rgba,colorchannelmixer=aa=1[watermark];"
+            "[0:v][watermark]overlay="
+            "x='max(main_w - w - (w/3.5), 0)':"
+            "y='max((w/2.5) - (h/2), 0)':"
+            "format=auto"
+        ),
         "-c:v", "hevc_nvenc",
         "-preset", "p7",
         "-profile:v", "main10",
@@ -316,7 +335,7 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
         "-aq-strength", "15",  # Улучшает качество сложных текстур
         "-spatial-aq", "1",  # Улучшает статичные сцены
         "-temporal-aq", "1",  # Улучшает динамические сцены
-        "-rc-lookahead", "32",  # Глубокий анализ сцен для лучшего качества
+        "-rc-lookahead", "64",  # Глубокий анализ сцен для лучшего качества
         "-colorspace", color_space,
         "-color_primaries", color_primaries,
         "-color_trc", color_trc,
@@ -404,7 +423,11 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
 
     ffmpeg_command = [
         "ffmpeg",
-        '-c:v', 'auto' if codec not in ['hevc', 'h264'] else 'hevc_cuvid' if codec == 'hevc' else 'h264_cuvid',
+        "-c:v", (
+            "auto" if codec not in ["hevc", "h264"]
+            else "hevc_cuvid" if codec == "hevc"
+            else "h264_cuvid"
+        ),
         "-i", input_file,
         "-c:v", "hevc_nvenc",
         "-preset", "p7",
