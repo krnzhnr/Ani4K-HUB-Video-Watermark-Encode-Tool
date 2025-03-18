@@ -319,11 +319,12 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
         "-color_range", color_range,
         "-filter_complex", (
             "[1:v]scale=iw*0.09:ih*0.09,"
-            "format=rgba,colorchannelmixer=aa=1[watermark];"
+            "zscale=rangein=full:range=limited,"
+            "format=rgba[watermark];"
             "[0:v][watermark]overlay="
             "x='max(main_w - w - (w/3.5), 0)':"
-            "y='max((w/2.5) - (h/2), 0)':"
-            "format=auto"
+            "y='max((w/2.5) - (h/2), 0)'[overlayed_video];"
+            "[overlayed_video]format=yuv420p10le"
         ),
         "-c:v", "hevc_nvenc",
         "-preset", "p7",
@@ -331,11 +332,11 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
         "-b:v", f"{video_bitrate}",
         "-maxrate", f"{maxrate}",
         "-bufsize", f"{bufsize}",
-        "-rc", "vbr",  # Улучшенное управление битрейтом
-        "-aq-strength", "15",  # Улучшает качество сложных текстур
-        "-spatial-aq", "1",  # Улучшает статичные сцены
-        "-temporal-aq", "1",  # Улучшает динамические сцены
-        "-rc-lookahead", "64",  # Глубокий анализ сцен для лучшего качества
+        "-rc", "vbr",
+        "-aq-strength", "15",
+        "-spatial-aq", "1",
+        "-temporal-aq", "1",
+        "-rc-lookahead", "64",
         "-colorspace", color_space,
         "-color_primaries", color_primaries,
         "-color_trc", color_trc,
@@ -435,11 +436,11 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
         "-b:v", f"{video_bitrate}",
         "-maxrate", f"{maxrate}",
         "-bufsize", f"{bufsize}",
-        "-rc", "vbr",  # Улучшенный контроль битрейта
-        "-aq-strength", "15",  # Улучшает детализацию сложных текстур
-        "-spatial-aq", "1",  # Улучшает качество статичных сцен
-        "-temporal-aq", "1",  # Улучшает динамичные сцены
-        "-rc-lookahead", "32",  # Анализирует 32 кадра вперёд (максимум для HEVC)
+        "-rc", "vbr",
+        "-aq-strength", "15",
+        "-spatial-aq", "1",
+        "-temporal-aq", "1",
+        "-rc-lookahead", "64",
         "-colorspace", color_space,
         "-color_primaries", color_primaries,
         "-color_trc", color_trc,
@@ -505,6 +506,7 @@ def main():
     """
     Основная функция, которая запускает скрипт и обрабатывает видео в зависимости от выбранного режима.
     """
+    print(f"{Fore.CYAN}{'=' * 100}\n")
     print("Выберите режим обработки:")
     print("1 - Обработка всех видео в двух вариантах: с водяным знаком и без")
     print("2 - Обработка только с водяным знаком")
