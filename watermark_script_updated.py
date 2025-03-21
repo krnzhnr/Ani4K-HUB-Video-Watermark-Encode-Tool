@@ -8,6 +8,7 @@ import re
 
 from src.utils.get_metadata import GetVideoMetadata
 from src.config import CONFIG
+from src.utils.logger import logger
 
 init(autoreset=True)
 
@@ -21,19 +22,19 @@ logging.basicConfig(
     encoding='utf-8'  # Устанавливаем кодировку UTF-8 для поддержки кириллицы
 )
 
-def log(message, level="INFO"):
-    """
-    Выводит сообщение в консоль с соответствующим цветом и записывает его в лог-файл.
+# def log(message, level="INFO"):
+#     """
+#     Выводит сообщение в консоль с соответствующим цветом и записывает его в лог-файл.
 
-    :param message: Сообщение, которое нужно вывести.
-    :param level: Уровень логирования, может быть "INFO", "SUCCESS", "WARNING", "ERROR".
-    """
-    color_map = {"INFO": Style.BRIGHT + Fore.BLUE, 
-                "SUCCESS": Fore.GREEN, 
-                "WARNING": Fore.YELLOW, 
-                "ERROR": Fore.RED}
-    print(color_map.get(level, Fore.WHITE) + message)
-    getattr(logging, level.lower(), logging.info)(message)
+#     :param message: Сообщение, которое нужно вывести.
+#     :param level: Уровень логирования, может быть "INFO", "SUCCESS", "WARNING", "ERROR".
+#     """
+#     color_map = {"INFO": Style.BRIGHT + Fore.BLUE, 
+#                 "SUCCESS": Fore.GREEN, 
+#                 "WARNING": Fore.YELLOW, 
+#                 "ERROR": Fore.RED}
+#     print(color_map.get(level, Fore.WHITE) + message)
+#     getattr(logging, level.lower(), logging.info)(message)
 
 # Создание выходных директорий, если они не существуют
 # os.makedirs(output_dir, exist_ok=True)
@@ -219,50 +220,6 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
         output_file
     ]
     
-    ffmpeg_commands = [
-    'ffmpeg',
-    '-hwaccel', 'cuda',
-    '-c:v', 'libaom-av1',
-    '-i', input_file,
-    '-i', CONFIG.static_watermark,
-    '-pix_fmt', 'yuv420p10le',
-    '-color_range', color_range,
-    '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09:flags=lanczos[scaled_static];"
-                        "[0:v][scaled_static]overlay=x='main_w-w-68':y='64':format=auto,"
-                        "gradfun=3:30,format=yuv420p10le",
-    '-preset', 'p7',  # Максимальное качество
-    '-b:v', f'{video_bitrate}',  
-    '-maxrate', f'{maxrate}',  
-    '-bufsize', f'{bufsize}',  
-    '-colorspace', color_space,
-    '-color_primaries', color_primaries,
-    '-color_trc', color_trc,
-    # '-spatial-aq', '1',
-    # '-temporal-aq', '1',
-    # '-aq-strength', '20',  # Максимальная адаптивная компрессия
-    # '-rc', 'vbr',
-    # '-cq', '16',  # Чистейшее качество (можно пробовать 14 или 12)
-    # '-multipass', 'fullres',  
-    # '-bf', '7',
-    # '-refs', '7',
-    # '-g', '500',
-    # '-rc-lookahead', '64',
-    # '-deblock', '-3:-3',
-    # '-tag:v', 'av01',
-    '-movflags', '+faststart',
-    '-c:a', 'aac',
-    '-b:a', f"{int(audio_bitrate)}k",
-    '-ac', '2',
-    '-map_metadata', '-1',
-    '-metadata', f'description={CONFIG.description}',
-    '-metadata', f'title={CONFIG.description}',
-    output_file
-]
-
-
-
-
-
     run_ffmpeg_with_progress(ffmpeg_command, duration)
 
 def process_video_without_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize):
