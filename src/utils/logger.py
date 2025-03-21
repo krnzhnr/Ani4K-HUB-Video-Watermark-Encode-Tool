@@ -30,7 +30,7 @@ class TqdmLoggingHandler(logging.Handler):
 class ColorFormatter(logging.Formatter):
     """Форматирование с цветами для консоли"""
     format_template = (
-        "%(asctime)s | %(levelname)-8s | %(message)s"
+        "%(asctime)s | %(levelname)-7s | %(message)s"
     )
     
     # Цвета для уровней логирования

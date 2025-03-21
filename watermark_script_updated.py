@@ -22,20 +22,6 @@ logging.basicConfig(
     encoding='utf-8'  # Устанавливаем кодировку UTF-8 для поддержки кириллицы
 )
 
-# def log(message, level="INFO"):
-#     """
-#     Выводит сообщение в консоль с соответствующим цветом и записывает его в лог-файл.
-
-#     :param message: Сообщение, которое нужно вывести.
-#     :param level: Уровень логирования, может быть "INFO", "SUCCESS", "WARNING", "ERROR".
-#     """
-#     color_map = {"INFO": Style.BRIGHT + Fore.BLUE, 
-#                 "SUCCESS": Fore.GREEN, 
-#                 "WARNING": Fore.YELLOW, 
-#                 "ERROR": Fore.RED}
-#     print(color_map.get(level, Fore.WHITE) + message)
-#     getattr(logging, level.lower(), logging.info)(message)
-
 # Создание выходных директорий, если они не существуют
 # os.makedirs(output_dir, exist_ok=True)
 # os.makedirs(no_wm_output_dir, exist_ok=True)
@@ -82,7 +68,7 @@ def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate
         video_size, audio_size = calculate_sizes(duration, current_video_bitrate, audio_bitrate)
         total_size = (video_size + audio_size) * (1024 * 1024)  # Перевод в байты
 
-        log(f"Текущий расчетный размер: {total_size / (1024**3):.2f} GB (video: {video_size:.2f} MB, audio: {audio_size:.2f} MB)")
+        logger.info(f"Текущий расчетный размер: {total_size / (1024**3):.2f} GB (video: {video_size:.2f} MB, audio: {audio_size:.2f} MB)")
 
         if total_size <= target_size_bytes:
             maxrate, bufsize = calculate_maxrate_and_bufsize(current_video_bitrate)
@@ -90,14 +76,14 @@ def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate
             maxrate_mbit = maxrate / 1000000
             current_video_bitrate_mbit = current_video_bitrate / 1000000
             bufsize_mbit = bufsize / 1000000
-            log(f"Целевой размер достигнут: {total_size / (1024**3):.2f} GB. "
+            logger.success(f"Целевой размер достигнут: {total_size / (1024**3):.2f} GB. "
                 f"Битрейт (Мбит) max/min/avg: {maxrate_mbit:.2f}/0/{current_video_bitrate_mbit:.2f}, "
-                f"размер буфера: {bufsize_mbit:.2f} Мбит.", "SUCCESS")
+                f"размер буфера: {bufsize_mbit:.2f} Мбит.")
             break
         else:
             # Уменьшаем битрейт видео на 1% и проверяем снова
             current_video_bitrate *= 0.99
-            log(f"Снижение битрейта до {current_video_bitrate / 10**6:.2f} Mbps для достижения целевого размера.", "WARNING")
+            logger.warning(f"Снижение битрейта до {current_video_bitrate / 10**6:.2f} Mbps для достижения целевого размера.")
 
     return current_video_bitrate
 
@@ -169,10 +155,10 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     output_file = os.path.join(CONFIG.output_dir, f'[Ani4KHUB] {base_name}_watermarked.mp4')
 
     if os.path.exists(output_file):
-        log(f'Файл с водяной меткой {output_file} уже существует. Пропускаем обработку.', "INFO")
+        logger.info(f'Файл с водяной меткой {output_file} уже существует. Пропускаем обработку.')
         return
 
-    log(f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4', "INFO")
+    logger.info (f'Обработка файла с водяной меткой: {base_name}_watermarked.mp4')
 
     ffmpeg_command = [
         "ffmpeg",
@@ -242,10 +228,10 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
     no_wm_output_file = os.path.join(CONFIG.no_wm_output_dir, f'[Ani4KHUB] {base_name}_wwm.mp4')
 
     if os.path.exists(no_wm_output_file):
-        log(f'Файл без водяной метки {no_wm_output_file} уже существует. Пропускаем обработку.', "INFO")
+        logger.info(f'Файл без водяной метки {no_wm_output_file} уже существует. Пропускаем обработку.')
         return
 
-    log(f'Обработка файла без водяной метки: {base_name}_wwm.mp4', "INFO")
+    logger.info(f'Обработка файла без водяной метки: {base_name}_wwm.mp4')
 
     ffmpeg_command = [
         "ffmpeg",
@@ -297,22 +283,22 @@ def process_video(input_file, base_name, mode):
     print(metadata)
     
     if metadata.codec is None:
-        log(f'Не удалось получить метаданные для {input_file}', "ERROR")
+        logger.error(f'Не удалось получить метаданные для {input_file}')
         return
 
     # Оценка размера видео и аудио
     target_size_gb = CONFIG.max_file_size_gb
     if metadata.duration / 60 > CONFIG.threshold_minutes:  # Если длительность видео больше порога
-        log(f"Длина видео превышает {CONFIG.threshold_minutes} минут. "
-            f"Расчет битрейта для достижения целевого размера...", "INFO")
+        logger.info(f"Длина видео превышает {CONFIG.threshold_minutes} минут. "
+            f"Расчет битрейта для достижения целевого размера...")
         video_bitrate = adjust_bitrate_to_size(
             input_file, CONFIG.static_watermark, metadata.duration, metadata.audio_bitrate, target_size_gb, CONFIG.default_video_bitrate)
 
         # Рассчитываем maxrate и bufsize только для адаптированного битрейта
         maxrate, bufsize = calculate_maxrate_and_bufsize(video_bitrate)
     else:
-        log(f"Длина видео менее {CONFIG.threshold_minutes} минут. "
-            f"Установка битрейта(Мбит/с) max/min/avg: 100/0/12, размер буфера: 200 Мбит...", "INFO")
+        logger.info(f"Длина видео менее {CONFIG.threshold_minutes} минут. "
+            f"Установка битрейта(Мбит/с) max/min/avg: 100/0/12, размер буфера: 200 Мбит...")
         # Для коротких видео устанавливаем стандартный битрейт
         video_bitrate = CONFIG.default_video_bitrate
         maxrate = 100 * 10**6  # 100 Мбит
@@ -367,7 +353,7 @@ def process_video(input_file, base_name, mode):
             bufsize
         )
     else:
-        log("Неверный режим обработки. Выберите 1 или 2.", "ERROR")
+        logger.error("Неверный режим обработки. Выберите 1 или 2.")
 
 def main():
     """
@@ -380,7 +366,7 @@ def main():
     mode = int(input("Введите номер режима: "))
 
     if mode not in [1, 2]:
-        log("Неверный режим обработки. Выберите 1 или 2.", "ERROR")
+        logger.error("Неверный режим обработки. Выберите 1 или 2.")
         return
 
     processed_any = False
@@ -394,10 +380,10 @@ def main():
             processed_any = True
 
     if not processed_any:
-        log("Не найдено файлов для обработки.", "INFO")
+        logger.info("Не найдено файлов для обработки.")
 
     # Завершение работы
-    log("Все файлы уже обработаны или пропущены.", "SUCCESS")
+    logger.success("Все файлы уже обработаны или пропущены.")
     input("Нажмите Enter для выхода...")
 
 if __name__ == "__main__":
