@@ -6,24 +6,11 @@ import yaml
 import tqdm
 import re
 
+from src.utils.get_metadata import GetVideoMetadata
+from src.config import CONFIG
+
 init(autoreset=True)
 
-# Загрузка конфигурации
-with open('config.yaml', 'r', encoding='utf-8') as config_file:
-    config = yaml.safe_load(config_file)
-
-# Настройки из файла конфигурации
-input_dir = config['input_dir']
-output_dir = config['output_dir']
-no_wm_output_dir = config['no_wm_output_dir']
-static_watermark = config['static_watermark']
-description = config['description']
-SETTINGS = {
-    "threshold_minutes": config['threshold_minutes'],
-    "max_file_size_gb": config['max_file_size_gb'],
-    "default_video_bitrate": config['default_video_bitrate'] * 10**6,  # Преобразуем из Мбит/с в биты/с,
-    "target_audio_bitrate": config['target_audio_bitrate'],
-}
 
 # Логирование
 log_file_path = os.path.join(os.path.dirname(__file__), "script.log")
@@ -49,8 +36,8 @@ def log(message, level="INFO"):
     getattr(logging, level.lower(), logging.info)(message)
 
 # Создание выходных директорий, если они не существуют
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(no_wm_output_dir, exist_ok=True)
+# os.makedirs(output_dir, exist_ok=True)
+# os.makedirs(no_wm_output_dir, exist_ok=True)
 
 def print_process_title(input_file: str):
     """Печатает разделитель с названием текущего файла."""
@@ -58,125 +45,6 @@ def print_process_title(input_file: str):
     print(f"{Fore.YELLOW}Обработка файла: {input_file}")
     print(f"{Fore.CYAN}{'=' * 100}\n")
 
-def get_video_metadata(input_file):
-    """
-    Извлекает метаданные видеофайла, включая кодек, длительность, битрейт аудио и параметры цвета, с помощью ffprobe.
-    Параметры цвета обрабатываются, если они не извлечены — используются значения по умолчанию.
-
-    :param input_file: Путь к видеофайлу.
-    :return: Кодек видео, длительность в секундах, битрейт аудио в кбит/с, параметры цвета.
-    """
-    try:
-        # Извлекаем кодек
-        codec = subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-select_streams", "v:0", 
-                "-show_entries", "stream=codec_name",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip()
-
-        # Извлекаем длительность
-        duration = float(subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip())
-
-        # Извлекаем битрейт аудио
-        audio_bitrate = float(subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-select_streams", "a:0", 
-                "-show_entries", "stream=bit_rate",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip()) / 1000  # в кбит/с
-
-        audio_bitrate = float(SETTINGS['target_audio_bitrate']) if audio_bitrate > float(SETTINGS['target_audio_bitrate']) else audio_bitrate
-
-        # Извлекаем параметры цвета
-        color_space = subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-select_streams", "v:0", 
-                "-show_entries", "stream=colorspace",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip()
-
-        color_primaries = subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-select_streams", "v:0", 
-                "-show_entries", "stream=color_primaries",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip()
-
-        color_trc = subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-select_streams", "v:0", 
-                "-show_entries", "stream=color_trc",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip()
-
-        color_range = subprocess.run(
-            [
-                "ffprobe", 
-                "-v", "error", 
-                "-select_streams", "v:0", 
-                "-show_entries", "stream=color_range",
-                "-of", "default=noprint_wrappers=1:nokey=1", 
-                input_file
-            ],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            ).stdout.decode().strip()
-
-        # Логируем извлеченные параметры
-        log(
-            f"Извлеченные параметры цвета:"
-            f"color_space -> {color_space}, "
-            f"color_primaries -> {color_primaries}, "
-            f"color_trc -> {color_trc}, "
-            f"color_range -> {color_range}. "
-            f"Для пустых параметров будут применены параметры по умолчанию.", "INFO"
-            )
-
-        # Устанавливаем значения по умолчанию, если какие-то параметры не были извлечены
-        color_space = color_space if color_space else 'bt709'
-        color_primaries = color_primaries if color_primaries else 'bt709'
-        color_trc = color_trc if color_trc else 'bt709'
-        color_range = color_range if color_range else 'limited'
-
-        return codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range
-
-    except Exception as e:
-        log(f"Не удалось извлечь метаданные для {input_file}: {e}", "ERROR")
-        return None, None, None, None, None, None, None
 
 def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     """
@@ -187,7 +55,7 @@ def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
     :param audio_bitrate: Битрейт аудио в кбит/с. Если None, используется target_audio_bitrate.
     :return: Размер видео и аудио потоков в МБ.
     """
-    audio_bitrate = SETTINGS["target_audio_bitrate"] or audio_bitrate  # Используем целевой битрейт, если текущий не указан
+    audio_bitrate = CONFIG.target_audio_bitrate or audio_bitrate  # Используем целевой битрейт, если текущий не указан
     video_size = (video_bitrate * duration) / (8 * 1024 * 1024)  # в МБ
     audio_size = (audio_bitrate * duration) / (8 * 1024)  # в МБ
     
@@ -297,7 +165,7 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     :param maxrate: Максимальный битрейт.
     :param bufsize: Размер буфера.
     """
-    output_file = os.path.join(output_dir, f'[Ani4KHUB] {base_name}_watermarked.mp4')
+    output_file = os.path.join(CONFIG.output_dir, f'[Ani4KHUB] {base_name}_watermarked.mp4')
 
     if os.path.exists(output_file):
         log(f'Файл с водяной меткой {output_file} уже существует. Пропускаем обработку.', "INFO")
@@ -314,7 +182,7 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
             else "h264_cuvid"
         ),
         "-i", input_file,
-        "-i", static_watermark,
+        "-i", CONFIG.static_watermark,
         "-pix_fmt", "yuv420p10le",
         "-color_range", color_range,
         "-filter_complex", (
@@ -346,8 +214,8 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
         "-b:a", f"{audio_bitrate}k",
         "-ac", "2",
         "-map_metadata", "-1",
-        "-metadata", f"description={description}",
-        "-metadata", f"title={description}",
+        "-metadata", f"description={CONFIG.description}",
+        "-metadata", f"title={CONFIG.description}",
         output_file
     ]
     
@@ -356,7 +224,7 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     '-hwaccel', 'cuda',
     '-c:v', 'libaom-av1',
     '-i', input_file,
-    '-i', static_watermark,
+    '-i', CONFIG.static_watermark,
     '-pix_fmt', 'yuv420p10le',
     '-color_range', color_range,
     '-filter_complex', "[1:v]scale=iw*0.09:ih*0.09:flags=lanczos[scaled_static];"
@@ -386,8 +254,8 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
     '-b:a', f"{int(audio_bitrate)}k",
     '-ac', '2',
     '-map_metadata', '-1',
-    '-metadata', f'description={description}',
-    '-metadata', f'title={description}',
+    '-metadata', f'description={CONFIG.description}',
+    '-metadata', f'title={CONFIG.description}',
     output_file
 ]
 
@@ -414,7 +282,7 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
     :param maxrate: Максимальный битрейт.
     :param bufsize: Размер буфера.
     """
-    no_wm_output_file = os.path.join(no_wm_output_dir, f'[Ani4KHUB] {base_name}_wwm.mp4')
+    no_wm_output_file = os.path.join(CONFIG.no_wm_output_dir, f'[Ani4KHUB] {base_name}_wwm.mp4')
 
     if os.path.exists(no_wm_output_file):
         log(f'Файл без водяной метки {no_wm_output_file} уже существует. Пропускаем обработку.', "INFO")
@@ -451,8 +319,8 @@ def process_video_without_watermark(input_file, base_name, codec, duration, audi
         "-b:a", f"{audio_bitrate}k",
         "-ac", "2",
         "-map_metadata", "-1",
-        "-metadata", f"title={description}",
-        "-metadata", f"description={description}",
+        "-metadata", f"title={CONFIG.description}",
+        "-metadata", f"description={CONFIG.description}",
         no_wm_output_file
     ]
 
@@ -467,26 +335,29 @@ def process_video(input_file, base_name, mode):
     :param mode: Режим обработки (1 - с водяным знаком и без, 2 - только с водяным знаком).
     """
     # Получение метаданных
-    codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range = get_video_metadata(input_file)
-    if codec is None:
+    metadata = GetVideoMetadata(input_file)
+    
+    print(metadata)
+    
+    if metadata.codec is None:
         log(f'Не удалось получить метаданные для {input_file}', "ERROR")
         return
 
     # Оценка размера видео и аудио
-    target_size_gb = SETTINGS["max_file_size_gb"]
-    if duration / 60 > SETTINGS["threshold_minutes"]:  # Если длительность видео больше порога
-        log(f"Длина видео превышает {SETTINGS['threshold_minutes']} минут. "
+    target_size_gb = CONFIG.max_file_size_gb
+    if metadata.duration / 60 > CONFIG.threshold_minutes:  # Если длительность видео больше порога
+        log(f"Длина видео превышает {CONFIG.threshold_minutes} минут. "
             f"Расчет битрейта для достижения целевого размера...", "INFO")
         video_bitrate = adjust_bitrate_to_size(
-            input_file, static_watermark, duration, audio_bitrate, target_size_gb, SETTINGS["default_video_bitrate"])
+            input_file, CONFIG.static_watermark, metadata.duration, metadata.audio_bitrate, target_size_gb, CONFIG.default_video_bitrate)
 
         # Рассчитываем maxrate и bufsize только для адаптированного битрейта
         maxrate, bufsize = calculate_maxrate_and_bufsize(video_bitrate)
     else:
-        log(f"Длина видео менее {SETTINGS['threshold_minutes']} минут. "
+        log(f"Длина видео менее {CONFIG.threshold_minutes} минут. "
             f"Установка битрейта(Мбит/с) max/min/avg: 100/0/12, размер буфера: 200 Мбит...", "INFO")
         # Для коротких видео устанавливаем стандартный битрейт
-        video_bitrate = SETTINGS["default_video_bitrate"]
+        video_bitrate = CONFIG.default_video_bitrate
         maxrate = 100 * 10**6  # 100 Мбит
         bufsize = 200 * 10**6  # 200 Мбит
 
@@ -494,11 +365,50 @@ def process_video(input_file, base_name, mode):
 
     if mode == 1:
         # Обработка с водяным знаком и без
-        process_video_with_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize)
-        process_video_without_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize)
+        process_video_with_watermark(
+            input_file,
+            base_name,
+            metadata.codec,
+            metadata.duration,
+            metadata.audio_bitrate,
+            metadata.color_space,
+            metadata.color_primaries,
+            metadata.color_trc, 
+            metadata.color_range,
+            video_bitrate,
+            maxrate,
+            bufsize
+        )
+        process_video_without_watermark(
+            input_file,
+            base_name,
+            metadata.codec,
+            metadata.duration,
+            metadata.audio_bitrate,
+            metadata.color_space,
+            metadata.color_primaries,
+            metadata.color_trc,
+            metadata.color_range,
+            video_bitrate,
+            maxrate,
+            bufsize
+        )
     elif mode == 2:
         # Обработка только с водяным знаком
-        process_video_with_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize)
+        process_video_with_watermark(
+            input_file,
+            base_name,
+            metadata.codec,
+            metadata.duration,
+            metadata.audio_bitrate,
+            metadata.color_space,
+            metadata.color_primaries,
+            metadata.color_trc,
+            metadata.color_range,
+            video_bitrate,
+            maxrate,
+            bufsize
+        )
     else:
         log("Неверный режим обработки. Выберите 1 или 2.", "ERROR")
 
@@ -518,8 +428,8 @@ def main():
 
     processed_any = False
 
-    for file in os.listdir(input_dir):
-        file_path = os.path.join(input_dir, file)
+    for file in os.listdir(CONFIG.input_dir):
+        file_path = os.path.join(CONFIG.input_dir, file)
         
         if os.path.isfile(file_path) and file.lower().endswith(('mkv', 'mp4', 'avi')):
             base_name = os.path.splitext(file)[0]
