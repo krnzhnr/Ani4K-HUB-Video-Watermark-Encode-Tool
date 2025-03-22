@@ -9,18 +9,9 @@ import re
 from src.utils.get_metadata import GetVideoMetadata
 from src.config import CONFIG
 from src.utils.logger import logger
+from src.calculations.bitrate_calculator import BitrateCalculator
 
 init(autoreset=True)
-
-
-# Логирование
-log_file_path = os.path.join(os.path.dirname(__file__), "script.log")
-logging.basicConfig(
-    filename=log_file_path,
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    encoding='utf-8'  # Устанавливаем кодировку UTF-8 для поддержки кириллицы
-)
 
 # Создание выходных директорий, если они не существуют
 # os.makedirs(output_dir, exist_ok=True)
@@ -31,72 +22,6 @@ def print_process_title(input_file: str):
     print(f"\n{Fore.CYAN}{'=' * 100}")
     print(f"{Fore.YELLOW}Обработка файла: {input_file}")
     print(f"{Fore.CYAN}{'=' * 100}\n")
-
-
-def calculate_sizes(duration, video_bitrate, audio_bitrate=None):
-    """
-    Оценивает размеры видео и аудиопотоков на основе длительности видео и битрейтов.
-
-    :param duration: Длительность видео в секундах.
-    :param video_bitrate: Битрейт видео в бит/с.
-    :param audio_bitrate: Битрейт аудио в кбит/с. Если None, используется target_audio_bitrate.
-    :return: Размер видео и аудио потоков в МБ.
-    """
-    audio_bitrate = CONFIG.target_audio_bitrate or audio_bitrate  # Используем целевой битрейт, если текущий не указан
-    video_size = (video_bitrate * duration) / (8 * 1024 * 1024)  # в МБ
-    audio_size = (audio_bitrate * duration) / (8 * 1024)  # в МБ
-    
-    return video_size, audio_size
-
-def adjust_bitrate_to_size(input_file, static_watermark, duration, audio_bitrate, target_size_gb, video_bitrate):
-    """
-    Попытка уменьшить битрейт видео до тех пор, пока размер выходного файла не станет меньше заданного target_size_gb.
-
-    :param input_file: Путь к видеофайлу.
-    :param static_watermark: Путь к файлу водяного знака (не используется в расчетах, но может быть нужен для корректной обработки).
-    :param duration: Длительность видео в секундах.
-    :param audio_bitrate: Битрейт аудио в кбит/с.
-    :param target_size_gb: Целевой размер выходного файла в ГБ.
-    :param video_bitrate: Начальный битрейт видео в бит/с.
-    :return: Адаптированный битрейт видео в бит/с.
-    """
-    target_size_bytes = target_size_gb * 1024 * 1024 * 1024  # целевой размер в байтах
-    current_video_bitrate = video_bitrate
-
-    while True:
-        # Оценка размера видео с текущими битрейтами
-        video_size, audio_size = calculate_sizes(duration, current_video_bitrate, audio_bitrate)
-        total_size = (video_size + audio_size) * (1024 * 1024)  # Перевод в байты
-
-        logger.info(f"Текущий расчетный размер: {total_size / (1024**3):.2f} GB (video: {video_size:.2f} MB, audio: {audio_size:.2f} MB)")
-
-        if total_size <= target_size_bytes:
-            maxrate, bufsize = calculate_maxrate_and_bufsize(current_video_bitrate)
-            # Переводим maxrate, current_video_bitrate и bufsize в Мбит
-            maxrate_mbit = maxrate / 1000000
-            current_video_bitrate_mbit = current_video_bitrate / 1000000
-            bufsize_mbit = bufsize / 1000000
-            logger.success(f"Целевой размер достигнут: {total_size / (1024**3):.2f} GB. "
-                f"Битрейт (Мбит) max/min/avg: {maxrate_mbit:.2f}/0/{current_video_bitrate_mbit:.2f}, "
-                f"размер буфера: {bufsize_mbit:.2f} Мбит.")
-            break
-        else:
-            # Уменьшаем битрейт видео на 1% и проверяем снова
-            current_video_bitrate *= 0.99
-            logger.warning(f"Снижение битрейта до {current_video_bitrate / 10**6:.2f} Mbps для достижения целевого размера.")
-
-    return current_video_bitrate
-
-def calculate_maxrate_and_bufsize(video_bitrate):
-    """
-    Рассчитывает оптимальные значения для maxrate и bufsize на основе переданного битрейта видео.
-
-    :param video_bitrate: Битрейт видео в бит/с.
-    :return: Рассчитанные значения maxrate и bufsize.
-    """
-    maxrate = int(video_bitrate * 1.2)  # Максимальный битрейт — 1.25 раза больше обычного
-    bufsize = maxrate * 1.6  # Размер буфера равен maxrate
-    return maxrate, bufsize
 
 def run_ffmpeg_with_progress(command, total_duration):
     """
@@ -279,6 +204,8 @@ def process_video(input_file, base_name, mode):
     """
     # Получение метаданных
     metadata = GetVideoMetadata(input_file)
+    bitrate_calc = BitrateCalculator()
+
     
     print(metadata)
     
@@ -286,16 +213,16 @@ def process_video(input_file, base_name, mode):
         logger.error(f'Не удалось получить метаданные для {input_file}')
         return
 
-    # Оценка размера видео и аудио
-    target_size_gb = CONFIG.max_file_size_gb
+    # Оценка размера видео и аудио    
     if metadata.duration / 60 > CONFIG.threshold_minutes:  # Если длительность видео больше порога
         logger.info(f"Длина видео превышает {CONFIG.threshold_minutes} минут. "
             f"Расчет битрейта для достижения целевого размера...")
-        video_bitrate = adjust_bitrate_to_size(
-            input_file, CONFIG.static_watermark, metadata.duration, metadata.audio_bitrate, target_size_gb, CONFIG.default_video_bitrate)
-
-        # Рассчитываем maxrate и bufsize только для адаптированного битрейта
-        maxrate, bufsize = calculate_maxrate_and_bufsize(video_bitrate)
+        video_bitrate, maxrate, bufsize = bitrate_calc.adjust_bitrate_to_size(
+            duration=metadata.duration,
+            audio_bitrate=metadata.audio_bitrate,  # Теперь передаем явно
+            target_size_gb=CONFIG.max_file_size_gb,
+        )
+    
     else:
         logger.info(f"Длина видео менее {CONFIG.threshold_minutes} минут. "
             f"Установка битрейта(Мбит/с) max/min/avg: 100/0/12, размер буфера: 200 Мбит...")
