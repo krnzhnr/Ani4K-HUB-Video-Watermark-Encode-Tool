@@ -11,6 +11,7 @@ from src.config import CONFIG
 from src.utils.logger import logger
 from src.calculations.bitrate_calculator import BitrateCalculator
 
+
 init(autoreset=True)
 
 # Создание выходных директорий, если они не существуют
@@ -130,7 +131,7 @@ def process_video_with_watermark(input_file, base_name, codec, duration, audio_b
         "-metadata", f"title={CONFIG.description}",
         output_file
     ]
-    
+    logger.debug(ffmpeg_command)
     run_ffmpeg_with_progress(ffmpeg_command, duration)
 
 def process_video_without_watermark(input_file, base_name, codec, duration, audio_bitrate, color_space, color_primaries, color_trc, color_range, video_bitrate, maxrate, bufsize):
@@ -205,9 +206,8 @@ def process_video(input_file, base_name, mode):
     # Получение метаданных
     metadata = GetVideoMetadata(input_file)
     bitrate_calc = BitrateCalculator()
-
     
-    print(metadata)
+    logger.debug(metadata)
     
     if metadata.codec is None:
         logger.error(f'Не удалось получить метаданные для {input_file}')

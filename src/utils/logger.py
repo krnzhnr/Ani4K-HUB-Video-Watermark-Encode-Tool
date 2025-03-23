@@ -1,4 +1,4 @@
-# src/utils/log_utils.py
+# src/utils/logger.py
 import logging
 import colorama
 from colorama import Fore, Style
@@ -75,7 +75,7 @@ def setup_logger():
     console_handler = TqdmLoggingHandler()
     console_formatter = ColorFormatter("%(asctime)s | %(levelname)-8s | %(message)s")
     console_handler.setFormatter(console_formatter)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     
     # Файловый обработчик с уникальным именем
     file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
