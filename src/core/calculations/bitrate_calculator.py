@@ -26,7 +26,7 @@ class BitrateCalculator:
     ) -> tuple[int, int, int]:
         MIN_VIDEO_BITRATE = 1 * 10**6  # 1 Мбит/с
         target_size_bytes = target_size_gb * 1024**3
-        current_bitrate = CONFIG.default_video_bitrate * 10**6
+        current_bitrate = CONFIG.default_video_bitrate # Потом исправить для битрейта в мбит из конфига
         
         while current_bitrate > MIN_VIDEO_BITRATE:  # Минимум 1 Мбит/с [[8]]
             video_size, audio_size = self.calculate_sizes(

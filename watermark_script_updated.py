@@ -9,7 +9,7 @@ import re
 from src.utils.get_metadata import GetVideoMetadata
 from src.config import CONFIG
 from src.utils.logger import logger
-from src.calculations.bitrate_calculator import BitrateCalculator
+from src.core.calculations.bitrate_calculator import BitrateCalculator
 
 
 init(autoreset=True)
