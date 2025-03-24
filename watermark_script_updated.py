@@ -29,6 +29,8 @@ def process_video(input_file: str, base_name: str, mode: int):
             processor.process_without_watermark(input_file, output_no_wm)
         elif mode == 2:
             processor.process_with_watermark(input_file, output_wm)
+        elif mode == 3:
+            processor.process_without_watermark(input_file, output_no_wm)
     except Exception as e:
         logger.error(f"Ошибка обработки файла {input_file}: {str(e)}")
 
@@ -36,17 +38,18 @@ def main():
     cli.print_app_header()
 
     modes = {
-        1: "Обработка в двух вариантах (с водяным знаком и без)",
-        2: "Только с водяным знаком"
+        1: "С водяным знаком и без",
+        2: "Только с водяным знаком",
+        3: "Только без водяного знака"
     }
     cli.print_mode_selection(modes)
     
     try:
         mode = int(input("Введите номер режима: "))
-        if mode not in [1, 2]:
+        if mode not in [1, 2, 3]:
             raise ValueError
     except ValueError:
-        logger.error("Неверный режим обработки. Выберите 1 или 2.")
+        logger.error("Неверный режим обработки. Выберите 1, 2 или 3.")
         return
 
     processed_any = False
