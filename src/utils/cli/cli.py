@@ -3,7 +3,7 @@ from colorama import Fore, Style, init
 from typing import Optional
 
 class CLIInterface:
-    def __init__(self, app_name: str = "Ani4K HUB Watermarker", width: int = 100, 
+    def __init__(self, app_name: str = "Ani4K HUB Watermarker", width: int = 120, 
                 line_char: str = "=", accent_color: str = Fore.CYAN):
         """
         Инициализация интерфейса

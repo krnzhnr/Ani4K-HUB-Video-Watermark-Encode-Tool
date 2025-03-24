@@ -1,5 +1,7 @@
 import os
 from colorama import Fore, Style, init
+import time
+
 from src.config import CONFIG
 from src.utils.logger import logger
 from src.core.calculations.bitrate_calculator import BitrateCalculator
@@ -51,6 +53,16 @@ def main():
     except ValueError:
         logger.error("Неверный режим обработки. Выберите 1, 2 или 3.")
         return
+    
+    if mode == 1:
+        cli.print_section("Кодирование c водяным знаком и без")
+        time.sleep(3)
+    elif mode == 2:
+        cli.print_section("Кодирование с водяным знаком")
+        time.sleep(3)
+    elif mode == 3:
+        cli.print_section("Кодирование без водяного знака")
+        time.sleep(3)
 
     processed_any = False
 
