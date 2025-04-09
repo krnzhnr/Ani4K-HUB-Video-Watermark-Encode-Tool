@@ -1,6 +1,6 @@
 import os
-from colorama import Fore, Style, init
 import time
+from colorama import init
 
 from src.config import CONFIG
 from src.utils.logger import logger

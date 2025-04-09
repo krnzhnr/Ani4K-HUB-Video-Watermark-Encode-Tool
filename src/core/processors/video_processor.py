@@ -3,13 +3,11 @@ import os
 import subprocess
 import re
 import tqdm
-from typing import Optional
 
 from src.config import CONFIG
 from src.utils.logger import logger
 from src.core.calculations.bitrate_calculator import BitrateCalculator
 from src.utils.get_metadata import GetVideoMetadata
-
 
 class VideoProcessor:
     def __init__(self, metadata: GetVideoMetadata, bitrate_calculator: BitrateCalculator):

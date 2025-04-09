@@ -1,7 +1,6 @@
 import os
 import yaml
 from dataclasses import dataclass
-from typing import Optional
 
 @dataclass
 class AppConfig:
