@@ -15,6 +15,10 @@ class VideoProcessor:
     def __init__(self, metadata: GetVideoMetadata, bitrate_calculator: BitrateCalculator):
         self.metadata = metadata
         self.bitrate_calculator = bitrate_calculator
+        self.adjusted_audio_bitrate = min(
+            self.metadata.audio_bitrate,
+            CONFIG.target_audio_bitrate
+        )
         self._setup_bitrates()
 
     def _setup_bitrates(self):
@@ -181,7 +185,7 @@ class VideoProcessor:
             "-tag:v", "hvc1",
             "-movflags", "+faststart",
             "-c:a", "aac",
-            "-b:a", f"{self.metadata.audio_bitrate}k",
+            "-b:a", f"{self.adjusted_audio_bitrate}k",
             "-ac", "2",
             "-map_metadata", "-1",
             "-metadata", f"description={CONFIG.description}",
