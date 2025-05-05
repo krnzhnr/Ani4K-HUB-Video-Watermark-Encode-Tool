@@ -1,16 +1,10 @@
 @echo off
-REM Проверяем, есть ли виртуальное окружение
-IF NOT EXIST "venv" (
-    echo Creating venv...
+IF NOT EXIST "venv\Lib" (
     python -m venv venv
+    venv\Scripts\pip install -q -r requirements.txt
+) ELSE (
+    venv\Scripts\pip install -q --upgrade -r requirements.txt
 )
 
-REM Устанавливаем зависимости
-echo Installing dependencies...
-venv\Scripts\pip install -r requirements.txt
-
-REM Запускаем основной скрипт
-echo Running the script...
 venv\Scripts\python watermark_script_updated.py
-
 pause
