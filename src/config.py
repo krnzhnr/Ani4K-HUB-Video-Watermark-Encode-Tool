@@ -8,6 +8,7 @@ class AppConfig:
     output_dir: str
     no_wm_output_dir: str
     static_watermark: str
+    ffmpeg_path: str
     description: str
     threshold_minutes: int
     max_file_size_gb: float
@@ -51,6 +52,7 @@ def load_config() -> AppConfig:
         config['output_dir'] = os.path.abspath(config['output_dir'])
         config['no_wm_output_dir'] = os.path.abspath(config['no_wm_output_dir'])
         config['static_watermark'] = os.path.abspath(config['static_watermark'])
+        config['ffmpeg_path'] = os.path.abspath(config['ffmpeg_path'])
 
         # Создание объекта конфигурации
         app_config = AppConfig(**config)

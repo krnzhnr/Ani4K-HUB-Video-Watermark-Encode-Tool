@@ -39,7 +39,7 @@ class VideoProcessor:
         """Запуск FFmpeg с рабочим прогресс-баром"""
         # Добавляем обязательные параметры для вывода прогресса
         command = [
-            "ffmpeg",
+            CONFIG.ffmpeg_path,
             "-y",
             "-hide_banner",
             "-loglevel", "info",  # Включаем вывод информации
@@ -119,7 +119,7 @@ class VideoProcessor:
         """Сборка команды для обработки с водяным знаком"""
         return [
             # Глобальные параметры
-            "ffmpeg",
+            CONFIG.ffmpeg_path,
             "-y",
             "-hide_banner",
             "-loglevel", "error",
@@ -145,7 +145,7 @@ class VideoProcessor:
         """Сборка базовой команды без водяного знака"""
         return [
             # Глобальные параметры
-            "ffmpeg",
+            CONFIG.ffmpeg_path,
             "-y",
             "-hide_banner",
             "-loglevel", "error",

@@ -34,7 +34,7 @@ def process_video(input_file: str, base_name: str, mode: int):
         elif mode == 3:
             processor.process_without_watermark(input_file, output_no_wm)
     except Exception as e:
-        logger.error(f"Ошибка обработки файла {input_file}: {str(e)}")
+        logger.exception(f"Ошибка обработки файла {input_file}: {str(e)}")
 
 def main():
     cli.print_app_header()
