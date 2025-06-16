@@ -14,6 +14,7 @@ class AppConfig:
     max_file_size_gb: float
     default_video_bitrate: int  # в Мбит/с
     target_audio_bitrate: int  # в кбит/с
+    encoder: str
 
     def validate(self):
         """Валидация конфигурации"""

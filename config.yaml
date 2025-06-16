@@ -8,6 +8,9 @@ ffmpeg_path: ./ff.exe
 static_watermark: 'Ani4KHUB.png' # Файл водяного знака
 description: 'Made by Ani4K HUB | t.me/ani4k_ru' # Описание, которое будет вшиваться в метаданные видео в поля description и title
 
+# Выберите кодер: "av1_nvenc" или "hevc_nvenc"
+encoder: "av1_nvenc"
+
 # Настройки обработки
 threshold_minutes: 40 # Лимит времени, при привышении которого будет рассчитываться целевой битрейт (Минут)
 max_file_size_gb: 3.6 # Максимальный размер выходного файла (ГБ)

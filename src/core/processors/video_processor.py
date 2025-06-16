@@ -3,6 +3,7 @@ import os
 import subprocess
 import re
 import tqdm
+import sys
 
 from src.config import CONFIG
 from src.utils.logger import logger
@@ -41,11 +42,14 @@ class VideoProcessor:
         command = [
             CONFIG.ffmpeg_path,
             "-y",
-            "-hide_banner",
+            # "-hide_banner",
             "-loglevel", "info",  # Включаем вывод информации
             "-stats",             # Включаем статистику
-            *command[1:]          # Оставляем остальные параметры
+            *command         # Оставляем остальные параметры
         ]
+        
+        # logger.debug(f"Команда FFmpeg: {' '.join(command)}")
+
 
         progress_bar = tqdm.tqdm(
             total=int(total_duration),
@@ -71,6 +75,10 @@ class VideoProcessor:
                 line = process.stderr.readline()
                 if not line and process.poll() is not None:
                     break
+                
+                # Выводим строку в терминал
+                # sys.stderr.write(line)
+                # sys.stderr.flush()
 
                 # Парсим время из двух форматов:
                 # 1. Стандартный вывод времени
@@ -117,13 +125,9 @@ class VideoProcessor:
         
     def _build_watermark_command(self, input_file: str, output_path: str) -> list:
         """Сборка команды для обработки с водяным знаком"""
+        # Определяем формат пикселей в зависимости от кодера
+        pix_fmt = "p010le" if CONFIG.encoder == "av1_nvenc" else "yuv420p10le"
         return [
-            # Глобальные параметры
-            CONFIG.ffmpeg_path,
-            "-y",
-            "-hide_banner",
-            "-loglevel", "error",
-
             # Входные файлы
             "-hwaccel", "cuda",
             "-c:v", self._get_input_decoder(),
@@ -132,7 +136,7 @@ class VideoProcessor:
 
             # Фильтры
             "-filter_complex", self._watermark_filter,
-            "-pix_fmt", "yuv420p10le",
+            "-pix_fmt", pix_fmt,
 
             # Параметры кодирования
             *self._encoding_parameters,
@@ -144,13 +148,8 @@ class VideoProcessor:
     def _build_base_command(self, input_file: str, output_path: str) -> list:
         """Сборка базовой команды без водяного знака"""
         return [
-            # Глобальные параметры
-            CONFIG.ffmpeg_path,
-            "-y",
-            "-hide_banner",
-            "-loglevel", "error",
-
             # Входные файлы
+            "-hwaccel", "cuda",
             "-c:v", self._get_input_decoder(),
             "-i", input_file,
 
@@ -163,24 +162,9 @@ class VideoProcessor:
 
     @property
     def _encoding_parameters(self) -> list:
-        """Общие параметры кодирования"""
-        return [
-            "-c:v", "hevc_nvenc",
-            "-preset", "p7",
-            "-profile:v", "main10",
-            "-b:v", f"{self.video_bitrate}",
-            "-maxrate", f"{self.maxrate}",
-            "-bufsize", f"{self.bufsize}",
-            "-rc", "vbr",
-            "-aq-strength", "15",
-            "-spatial-aq", "1",
-            "-temporal-aq", "1",
-            "-rc-lookahead", "64",
-            "-colorspace", self.metadata.color_space,
-            "-color_primaries", self.metadata.color_primaries,
-            "-color_trc", self.metadata.color_trc,
-            "-color_range", self.metadata.color_range,
-            "-tag:v", "hvc1",
+        """Общие параметры кодирования, зависящие от выбранного кодера."""
+        # Общие параметры для аудио и контейнера
+        common_params = [
             "-movflags", "+faststart",
             "-c:a", "aac",
             "-b:a", f"{self.adjusted_audio_bitrate}k",
@@ -190,9 +174,60 @@ class VideoProcessor:
             "-metadata", f"title={CONFIG.description}"
         ]
 
+        if CONFIG.encoder == "av1_nvenc":
+            # Параметры для AV1 с исправленным синтаксисом
+            av1_params = [
+                "-c:v", "av1_nvenc",
+                "-preset", "p7",
+                "-multipass", "fullres",
+                "-rc", "vbr",
+                "-b:v", f"{self.video_bitrate}",
+                "-maxrate", f"{self.maxrate}",
+                "-bufsize", f"{self.bufsize}",
+                "-rc-lookahead", "240",
+                "-spatial-aq", "true",
+                "-enable-ref-frame-mvs", "true",
+                "-b_ref_mode", "each",
+                # "-weighted_pred", "true",
+                # Цветовые параметры
+                "-colorspace", self.metadata.color_space,
+                "-color_primaries", self.metadata.color_primaries,
+                "-color_trc", self.metadata.color_trc,
+                "-color_range", self.metadata.color_range,
+            ]
+            return av1_params + common_params
+
+        elif CONFIG.encoder == "hevc_nvenc":
+            # Параметры для HEVC (здесь все было в порядке)
+            hevc_params = [
+                "-c:v", "hevc_nvenc",
+                "-preset", "p7",
+                "-profile:v", "main10",
+                "-rc", "vbr",
+                "-b:v", f"{self.video_bitrate}",
+                "-maxrate", f"{self.maxrate}",
+                "-bufsize", f"{self.bufsize}",
+                "-rc-lookahead", "64",
+                "-aq-strength", "15",
+                "-spatial-aq", "1",
+                "-temporal-aq", "1",
+                "-tag:v", "hvc1",
+                "-colorspace", self.metadata.color_space,
+                "-color_primaries", self.metadata.color_primaries,
+                "-color_trc", self.metadata.color_trc,
+                "-color_range", self.metadata.color_range,
+            ]
+            return hevc_params + common_params
+        
+        else:
+            raise ValueError(f"Неподдерживаемый кодер указан в конфигурации: {CONFIG.encoder}")
+
     @property
     def _watermark_filter(self) -> str:
         """Фильтр для добавления водяного знака"""
+        # Определяем конечный формат в зависимости от кодера для лучшей производительности
+        output_format = "p010le" if CONFIG.encoder == "av1_nvenc" else "yuv420p10le"
+
         return (
             "[1:v]scale=iw*0.09:ih*0.09,"
             "zscale=rangein=full:range=limited,"
@@ -200,7 +235,7 @@ class VideoProcessor:
             "[0:v][watermark]overlay="
             "x='max(main_w - w - (w/3.5), 0)':"
             "y='max((w/2.5) - (h/2), 0)'[overlayed_video];"
-            "[overlayed_video]format=yuv420p10le"
+            f"[overlayed_video]format={output_format}"
         )
 
     def _get_input_decoder(self) -> str:
