@@ -14,7 +14,8 @@ class AppConfig:
     max_file_size_gb: float
     default_video_bitrate: int  # в Мбит/с
     target_audio_bitrate: int  # в кбит/с
-    encoder: str
+    long_video_encoder: str
+    short_video_encoder: str
 
     def validate(self):
         """Валидация конфигурации"""
@@ -41,6 +42,14 @@ class AppConfig:
             raise ValueError("default_video_bitrate должно быть больше 0")
         if self.target_audio_bitrate <= 0:
             raise ValueError("target_audio_bitrate должно быть больше 0")
+    
+    # ДОБАВЛЕНО: Валидация значений кодеров
+    def _validate_encoders(self):
+        valid_encoders = {"av1_nvenc", "hevc_nvenc"}
+        if self.long_video_encoder not in valid_encoders:
+            raise ValueError(f"Недопустимое значение для long_video_encoder: {self.long_video_encoder}")
+        if self.short_video_encoder not in valid_encoders:
+            raise ValueError(f"Недопустимое значение для short_video_encoder: {self.short_video_encoder}")
 
 def load_config() -> AppConfig:
     """Загрузка и валидация конфигурации"""

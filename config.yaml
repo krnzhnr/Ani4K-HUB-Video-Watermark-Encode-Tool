@@ -9,7 +9,8 @@ static_watermark: 'Ani4KHUB.png' # Файл водяного знака
 description: 'Made by Ani4K HUB | t.me/ani4k_ru' # Описание, которое будет вшиваться в метаданные видео в поля description и title
 
 # Выберите кодер: "av1_nvenc" или "hevc_nvenc"
-encoder: "av1_nvenc"
+long_video_encoder: "av1_nvenc"
+short_video_encoder: "hevc_nvenc"
 
 # Настройки обработки
 threshold_minutes: 40 # Лимит времени, при привышении которого будет рассчитываться целевой битрейт (Минут)

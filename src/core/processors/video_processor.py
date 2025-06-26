@@ -18,12 +18,17 @@ class VideoProcessor:
             self.metadata.audio_bitrate,
             CONFIG.target_audio_bitrate
         )
+        self.current_encoder = None 
         self._setup_bitrates()
 
     def _setup_bitrates(self):
         """Инициализация параметров битрейта на основе метаданных"""
         if self.metadata.duration / 60 > CONFIG.threshold_minutes:
             logger.info(f"Длина видео превышает {CONFIG.threshold_minutes} минут. Расчет битрейта...")
+            
+            self.current_encoder = CONFIG.long_video_encoder
+            logger.info(f"Выбран кодер для длинного видео: {self.current_encoder}")
+            
             calc_result = self.bitrate_calculator.adjust_bitrate_to_size(
                 duration=self.metadata.duration,
                 audio_bitrate=self.metadata.audio_bitrate,
@@ -32,6 +37,10 @@ class VideoProcessor:
             self.video_bitrate, self.maxrate, self.bufsize = calc_result
         else:
             logger.info(f"Длина видео менее {CONFIG.threshold_minutes} минут. Установка стандартного битрейта...")
+            
+            self.current_encoder = CONFIG.short_video_encoder
+            logger.info(f"Выбран кодер для короткого видео: {self.current_encoder}")
+            
             self.video_bitrate = CONFIG.default_video_bitrate
             self.maxrate = 100 * 10**6  # 100 Мбит/с
             self.bufsize = 200 * 10**6  # 200 Мбит
@@ -126,7 +135,7 @@ class VideoProcessor:
     def _build_watermark_command(self, input_file: str, output_path: str) -> list:
         """Сборка команды для обработки с водяным знаком"""
         # Определяем формат пикселей в зависимости от кодера
-        pix_fmt = "p010le" if CONFIG.encoder == "av1_nvenc" else "yuv420p10le"
+        pix_fmt = "p010le" if self.current_encoder == "av1_nvenc" else "yuv420p10le"
         return [
             # Входные файлы
             "-hwaccel", "cuda",
@@ -174,7 +183,7 @@ class VideoProcessor:
             "-metadata", f"title={CONFIG.description}"
         ]
 
-        if CONFIG.encoder == "av1_nvenc":
+        if self.current_encoder == "av1_nvenc":
             # Параметры для AV1 с исправленным синтаксисом
             av1_params = [
                 "-c:v", "av1_nvenc",
@@ -197,7 +206,7 @@ class VideoProcessor:
             ]
             return av1_params + common_params
 
-        elif CONFIG.encoder == "hevc_nvenc":
+        elif self.current_encoder == "hevc_nvenc":
             # Параметры для HEVC (здесь все было в порядке)
             hevc_params = [
                 "-c:v", "hevc_nvenc",
@@ -207,10 +216,13 @@ class VideoProcessor:
                 "-b:v", f"{self.video_bitrate}",
                 "-maxrate", f"{self.maxrate}",
                 "-bufsize", f"{self.bufsize}",
+                "-multipass", "fullres",
                 "-rc-lookahead", "64",
                 "-aq-strength", "15",
                 "-spatial-aq", "1",
                 "-temporal-aq", "1",
+                "-b_ref_mode", "each",
+                "-nonref_p", "1",
                 "-tag:v", "hvc1",
                 "-colorspace", self.metadata.color_space,
                 "-color_primaries", self.metadata.color_primaries,
@@ -220,13 +232,13 @@ class VideoProcessor:
             return hevc_params + common_params
         
         else:
-            raise ValueError(f"Неподдерживаемый кодер указан в конфигурации: {CONFIG.encoder}")
+            raise ValueError(f"Неподдерживаемый кодер указан в конфигурации: {self.current_encoder}")
 
     @property
     def _watermark_filter(self) -> str:
         """Фильтр для добавления водяного знака"""
         # Определяем конечный формат в зависимости от кодера для лучшей производительности
-        output_format = "p010le" if CONFIG.encoder == "av1_nvenc" else "yuv420p10le"
+        output_format = "p010le" if self.current_encoder == "av1_nvenc" else "yuv420p10le"
 
         return (
             "[1:v]scale=iw*0.09:ih*0.09,"
